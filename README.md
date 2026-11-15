@@ -1,8 +1,22 @@
 # SIGA — Sistema Integral de Gestión Académica
 
-**E.T.C. Andrés Bello**
+**Escuela Técnica Comercial "Andrés Bello"** (`etcandresbello.org`)  
+*Puerto Ordaz, Estado Bolívar, Venezuela — Código DEA: OD01340701*
 
-Plataforma web y PWA *offline-first* para la gestión integral, automatización y optimización de los flujos académicos, administrativos, estudiantiles, de pasantías, biblioteca, comedor y mantenimiento operativo de la **E.T.C. Andrés Bello** (~1.300 estudiantes, 1.º a 6.º año en menciones técnicas de **Telemática**, **Aduanas** y **Turismo**), alineada con los estándares y formatos del **MPPE** y **CDCE**.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Status: Architecture & Provisioning](https://img.shields.io/badge/Estado-Arquitectura%20y%20Planificaci%C3%B3n-orange.svg)](#estado-actual-del-proyecto)
+[![Community Service: UNEG](https://img.shields.io/badge/Servicio%20Comunitario-UNEG%20Ingenier%C3%ADa%20Inform%C3%A1tica-green.svg)](#equipo-de-desarrollo)
+
+Plataforma web y PWA *offline-first* de código abierto para la gestión integral, automatización y optimización de los flujos académicos, administrativos, estudiantiles, de pasantías, biblioteca, comedor (PAE) y mantenimiento operativo de la **E.T.C. "Andrés Bello"** (~1.300 estudiantes, 1.º a 6.º año en menciones técnicas de **Telemática**, **Aduanas** y **Turismo**), alineada con los estándares y formatos oficiales del **MPPE** y **CDCE**.
+
+---
+
+## Estado Actual del Proyecto
+
+> **Fase Actual: Arquitectura, Diseño e Infraestructura Previa al Desarrollo**  
+> Este repositorio se encuentra en su etapa inicial de planificación técnica y provisión de infraestructura educativa/open-source antes de iniciar el ciclo activo de codificación.
+
+El sistema está siendo diseñado por estudiantes de **Ingeniería Informática de la Universidad Nacional Experimental de Guayana (UNEG)** como proyecto de Servicio Comunitario, con el doble objetivo de digitalizar los procesos administrativos del plantel a costo cero y servir como arquitectura de referencia viva para cientos de estudiantes de bachillerato técnico de la mención **Telemática**.
 
 ---
 
@@ -15,12 +29,14 @@ Plataforma web y PWA *offline-first* para la gestión integral, automatización 
 5. [Seguridad, Auditoría e Integridad de Datos](#seguridad-auditoría-e-integridad-de-datos)
 6. [Parametrización e Ingesta Inicial (Data Seeding)](#parametrización-e-ingesta-inicial-data-seeding)
 7. [Despliegue, Observabilidad y Notificaciones](#despliegue-observabilidad-y-notificaciones)
+8. [Patrocinadores y Aliados Tecnológicos](#patrocinadores-y-aliados-tecnológicos)
+9. [Licencia y Código de Conducta](#licencia-y-código-de-conducta)
 
 ---
 
 ## Arquitectura General y Stack Tecnológico
 
-SIGA adopta una arquitectura **monolítica *serverless* full-stack** sobre Next.js (App Router) con renderizado en servidor (SSR) para garantizar tiempos de carga óptimos en dispositivos móviles de gama baja y equipos antiguos, acoplada a un BaaS en PostgreSQL (Supabase) con soporte vectorial y en tiempo real.
+SIGA adopta una arquitectura **monolítica *serverless* full-stack** sobre Next.js (App Router) con renderizado en servidor (SSR) para garantizar tiempos de carga óptimos en dispositivos móviles de gama baja y equipos antiguos, acoplada a un BaaS en PostgreSQL con soporte vectorial y en tiempo real.
 
 ### 1. Frontend & UI/UX
 | Componente | Tecnología | Propósito Técnico |
@@ -35,15 +51,15 @@ SIGA adopta una arquitectura **monolítica *serverless* full-stack** sobre Next.
 | Componente | Tecnología | Propósito Técnico |
 | :--- | :--- | :--- |
 | **Runtime y Endpoints** | **Node.js (Next.js Server Actions & Route Handlers)** | API REST y mutaciones *serverless* integradas sin servidor backend independiente. |
-| **Acceso a Datos / ORM** | **Prisma ORM o Drizzle ORM + `@supabase/supabase-js`** | Modelado relacional tipado, migraciones limpias y consultas nativas a Supabase. |
-| **Tareas Programadas (Cron)** | **Inngest / GitHub Actions** | Ejecución asíncrona de resúmenes semanales, alertas de biblioteca y *keep-alive* de BD. |
+| **Acceso a Datos / ORM** | **Prisma ORM o Drizzle ORM + `@supabase/supabase-js`** | Modelado relacional tipado, migraciones limpias y consultas nativas a PostgreSQL. |
+| **Tareas Programadas (Cron)** | **GitHub Actions / Inngest** | Ejecución asíncrona de resúmenes semanales, alertas de biblioteca y mantenimiento programado. |
 
 ### 3. Base de Datos, Autenticación y Tiempo Real (BaaS)
 | Componente | Tecnología | Propósito Técnico |
 | :--- | :--- | :--- |
-| **Motor Relacional** | **Supabase (PostgreSQL)** | Esquema académico, administrativo y multi-sede (*Multi-Tenant*). |
+| **Motor Relacional** | **PostgreSQL (Supabase / Neon)** | Esquema académico, administrativo y multi-sede (*Multi-Tenant*). |
 | **Seguridad a Nivel de Fila** | **PostgreSQL Row Level Security (RLS)** | Aislamiento estricto por rol: estudiantes solo leen sus notas; docentes solo editan sus secciones asignadas. |
-| **Autenticación** | **Supabase Auth** | Cédula/Correo + contraseña, Google OAuth (`@etcandresbello.org`) y *Magic Links* sin registro para tutores externos. |
+| **Autenticación** | **Supabase Auth / OAuth** | Cédula/Correo + contraseña, Google OAuth (`@etcandresbello.org`) y *Magic Links* sin registro para tutores externos. |
 | **Base Vectorial (RAG)** | **Extensión `pgvector`** | Almacenamiento de *embeddings* de guías docentes y libros dentro del mismo PostgreSQL para el Tutor IA. |
 | **Eventos en Tiempo Real** | **Supabase Realtime** | Actualización instantánea en pantalla de tickets de mantenimiento y alertas de portería sin recargar. |
 
@@ -146,11 +162,11 @@ SIGA adopta una arquitectura **monolítica *serverless* full-stack** sobre Next.
 
 ### Resiliencia ante Fallas Eléctricas y de Conectividad
 - **PWA Instalable (`@serwist/next`):** Instalación directa desde el navegador en Android, iOS y escritorio sin depender de tiendas de aplicaciones.
-- **Caché y Sincronización Local:** Combinación de **TanStack Query** + **IndexedDB** (`idb-keyval` / `Dexie.js`). Permite registrar asistencia o calificaciones sin conexión eléctrica ni internet en el aula; las mutaciones se encolan en almacenamiento local y se sincronizan automáticamente con Supabase al recuperar conectividad.
+- **Caché y Sincronización Local:** Combinación de **TanStack Query** + **IndexedDB** (`idb-keyval` / `Dexie.js`). Permite registrar asistencia o calificaciones sin conexión eléctrica ni internet en el aula; las mutaciones se encolan en almacenamiento local y se sincronizan automáticamente con la nube al recuperar conectividad.
 
 ### Optimización de Cuotas y Ancho de Banda
 1. **0 MB en PDFs oficiales:** Los reportes y certificaciones se renderizan íntegramente en el navegador del cliente mediante `@react-pdf/renderer` a partir de datos JSON consultados en PostgreSQL.
-2. **Compresión de imágenes en cliente:** Las fotografías (carnets, portadas, reportes de fallas) se comprimen a `.webp` en el navegador (`browser-image-compression`) antes de enviarse a Supabase Storage / Cloudinary.
+2. **Compresión de imágenes en cliente:** Las fotografías (carnets, portadas, reportes de fallas) se comprimen a `.webp` en el navegador (`browser-image-compression`) antes de enviarse a Storage/Cloudinary.
 3. **Descarga de archivos pesados:** Los informes extensos de pasantías en PDF se enrutan directamente hacia el almacenamiento institucional mediante **Google Drive API**.
 
 ---
@@ -169,7 +185,7 @@ SIGA adopta una arquitectura **monolítica *serverless* full-stack** sobre Next.
 Para inicializar el entorno productivo y alimentar los motores de reglas, generación de documentos y prompts de IA, el sistema requiere los siguientes conjuntos de datos maestros:
 
 1. **Configuración Institucional y Legal:**
-   - Códigos oficiales ante MPPE (Código DEA, Código de Dependencia), Código CNAE/PAE y RIF.
+   - Códigos oficiales ante MPPE (Código DEA `OD01340701`, Código de Dependencia), Código CNAE/PAE y RIF.
    - Credenciales y datos de autoridades firmantes (Director/a, Subdirectores Académico y Administrativo/Técnico, Coordinador/a de Control de Estudios) y decretos/resoluciones de nombramiento.
    - Activos gráficos oficiales (escudo/logo vectorial y cintillos MPPE/CDCE) y configuración de subdominio sobre `etcandresbello.org`.
 2. **Núcleo Académico y Reglas de Negocio:**
@@ -192,9 +208,37 @@ Para inicializar el entorno productivo y alimentar los motores de reglas, genera
 
 ## Despliegue, Observabilidad y Notificaciones
 
-- **CI/CD y Control de Versiones:** Git & GitHub con flujos automatizados mediante **GitHub Actions** (incluyendo tareas programadas de mantenimiento/respaldo).
-- **Hosting y Red:** Despliegue continuo en **Vercel** conectado al dominio institucional `etcandresbello.org` bajo protección y resolución **Cloudflare DNS**.
+- **CI/CD y Control de Versiones:** Git & GitHub con flujos automatizados mediante **GitHub Actions** (incluyendo tareas programadas de mantenimiento y respaldo).
+- **Hosting, Edge y Seguridad Perimetral:** Despliegue continuo en **Cloudflare Pages / Workers** (bajo **Project Galileo**) y **Netlify / Vercel**, conectado al dominio institucional `etcandresbello.org` con protección WAF y resolución **Cloudflare DNS**.
 - **Monitoreo de Errores:** **Sentry** integrado para captura y trazabilidad en tiempo real de excepciones en cliente y servidor.
 - **Canales de Mensajería y Alertas:**
-  - **Correos Transaccionales:** **Resend + React Email** (o **Nodemailer** vía SMTP institucional de Google Workspace) para envío masivo de boletines, notificaciones y recuperación de credenciales.
+  - **Correos Transaccionales:** **Mailtrap (Email Delivery API / SMTP)** + **React Email** (complementado por SMTP institucional de Google Workspace) para envío de boletines, notificaciones y recuperación de credenciales.
   - **Alertas Instantáneas:** **Telegram Bot API** para notificaciones en tiempo real hacia representantes y docentes, complementado con notificaciones Push web.
+
+---
+
+## Patrocinadores y Aliados Tecnológicos
+
+Este proyecto educativo sin fines de lucro es posible gracias al apoyo de iniciativas de código abierto y programas educativos:
+
+- **Cloudflare (Project Galileo):** Protección perimetral Business, DNS e infraestructura Edge para `etcandresbello.org`.
+- **Mailtrap:** Infraestructura de entrega de correos transaccionales y entornos de prueba (Sandbox).
+- **Hosting & Despliegue Open Source:** [This site is powered by Netlify](https://www.netlify.com) / Vercel.
+
+---
+
+## Equipo de Desarrollo
+
+Proyecto desarrollado en el marco del **Servicio Comunitario de Ingeniería Informática** — **Universidad Nacional Experimental de Guayana (UNEG)**:
+
+- **Jesús Colmenares** — Líder de Proyecto y Arquitectura Full-Stack
+- **Yosdelis Rondón** — Desarrollo Frontend y Gestión Académica
+- **Josiannis Villegas** — Desarrollo Backend, Datos y Documentación
+- **Asesora Académica:** Prof. Dubraska Roca (UNEG)
+
+---
+
+## Licencia y Código de Conducta
+
+- Este proyecto se distribuye bajo la **Licencia MIT**. Consulta el archivo [`LICENSE`](LICENSE) para más detalles.
+- Para contribuir o participar en este repositorio, por favor revisa nuestro [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
