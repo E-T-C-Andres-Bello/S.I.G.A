@@ -1,0 +1,511 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ==================== FUENTES ORIGINALES DE LA PÁGINA DE REFERENCIA (CONTROL) ==================== */
+@font-face {
+  font-family: "Control";
+  src: url("/fonts/ControlUpright-Regular-Web.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Control";
+  src: url("/fonts/ControlUpright-Regular-Web.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Control TNT";
+  src: url("/fonts/ControlUpright-LightTNT-Web.woff2") format("woff2");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Control TNT";
+  src: url("/fonts/ControlUpright-RegularTNT-Web.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Control Cursive";
+  src: url("/fonts/ControlCursive-RegularTNT-Web.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Control Compressed";
+  src: url("/fonts/ControlCompressed-Super-Web.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme inline {
+  --font-sans: "Control", var(--font-inter), system-ui, -apple-system, sans-serif;
+  --font-display: "Control", var(--font-space-grotesk), var(--font-inter), sans-serif;
+  --font-hero: var(--font-inter), system-ui, -apple-system, sans-serif;
+  --font-cursive: "Control Cursive", Georgia, serif;
+  --font-compressed: "Control Compressed", Impact, sans-serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+}
+
+:root {
+  /* Paleta original Navy -> Azul institucional (#1c47c4) -> Blanco hielo (#f7fafb) */
+  --background: #f7fafb;
+  --foreground: #090d16;
+  --muted: #eef2f6;
+  --muted-foreground: #526075;
+  --card: #ffffff;
+  --card-foreground: #090d16;
+  --border: #dfe6ef;
+
+  --primary: #1c47c4;
+  --primary-foreground: #ffffff;
+  --secondary: #edf2f8;
+  --secondary-foreground: #0f172a;
+  --accent: #e8eefb;
+  --accent-foreground: #1c47c4;
+  --siga-spin-rgb: 28, 71, 196;
+  --siga-scroll-brand: #e0f2fe;
+
+  --ease-air-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-air-overshoot: cubic-bezier(0.34, 2.56, 0.64, 1);
+}
+
+.dark {
+  /* Modo oscuro obsidiana-navy calmado que se funde con la bruma WebGL */
+  --background: #020617;
+  --foreground: #f1f5f9;
+  --muted: #0b132b;
+  --muted-foreground: #94a3b8;
+  --card: #081024;
+  --card-foreground: #f8fafc;
+  --border: rgba(148, 163, 184, 0.16);
+
+  --primary: #5790e6;
+  --primary-foreground: #020617;
+  --secondary: #0f1c3b;
+  --secondary-foreground: #e2e8f0;
+  --accent: #10214a;
+  --accent-foreground: #7dd3fc;
+  --siga-spin-rgb: 125, 211, 252;
+  --siga-scroll-brand: #f8fafc;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  letter-spacing: 0.014em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.font-hero {
+  font-family: var(--font-hero);
+}
+
+.font-cursive {
+  font-family: var(--font-cursive);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: 0.015em;
+}
+
+.font-compressed {
+  font-family: var(--font-compressed);
+  font-weight: 900;
+  text-transform: uppercase;
+  line-height: 0.94;
+  letter-spacing: 0.045em;
+  word-spacing: 0.14em;
+}
+
+/* ==================== 1. HEADER & BOTONES ESTILO AIR (style7.css) ==================== */
+.air-link-underline {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.air-link-underline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  width: 100%;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 320ms var(--ease-air-out);
+}
+
+.air-link-underline:hover::after,
+.air-link-underline:focus-visible::after {
+  transform: scaleX(1);
+}
+
+/* Botón secundario Air con barrido radial inclinado (skewX(45deg) + rotate 180deg) */
+.air-btn-secondary {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  transition: border-color 300ms var(--ease-air-out), transform 300ms var(--ease-air-out);
+}
+
+.air-btn-secondary::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  z-index: -1;
+  background: radial-gradient(
+    55% 80% at 50% 100%,
+    rgba(87, 144, 230, 0.48) 0%,
+    rgba(28, 71, 196, 0) 75%
+  );
+  transform: skewX(45deg) rotate(0deg);
+  transition: transform 650ms var(--ease-air-out), opacity 450ms var(--ease-air-out);
+  opacity: 0.75;
+}
+
+.air-btn-secondary:hover::before {
+  transform: skewX(45deg) rotate(180deg);
+  opacity: 1;
+}
+
+/* Botón primario Air con resplandor radial expansivo y texto 1.05x */
+.air-btn-primary {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  transition: transform 300ms var(--ease-air-out), box-shadow 300ms var(--ease-air-out);
+}
+
+.air-btn-primary::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(
+    45% 80% at 50% 100%,
+    rgba(125, 211, 252, 0.55) 0%,
+    rgba(28, 71, 196, 0) 100%
+  );
+  transform: translate3d(0, 0, 0) scale(1);
+  transition: transform 650ms var(--ease-air-out);
+}
+
+.air-btn-primary:hover::before {
+  transform: translate3d(25%, 0, 0) scale(2.8);
+}
+
+.air-btn-primary > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  transition: transform 300ms var(--ease-air-out);
+}
+
+.air-btn-primary:hover > span {
+  transform: scale(1.04);
+}
+
+/* Marca estática en el encabezado; el color acompaña al tema activo. */
+.air-logo-mark .air-logo-ring {
+  stroke-dasharray: 76;
+  stroke-dashoffset: 0;
+  stroke: var(--primary);
+}
+
+/* ==================== 2. REVELACIÓN POR FRASES EN CASCADA (HomeHero style2.css) ==================== */
+.air-phrase-reveal {
+  opacity: 0;
+  transform: translate3d(0, 22px, 0);
+  will-change: transform, opacity;
+  transition:
+    opacity 1000ms var(--ease-air-out),
+    transform 1000ms var(--ease-air-out);
+}
+
+.air-phrase-reveal.is-visible {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+/* Primitivas adicionales de scroll */
+.clip-line-wrap {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+  padding-bottom: 0.14em;
+  margin-bottom: -0.14em;
+}
+
+.clip-line-inner {
+  display: inline-block;
+  transform: translate3d(0, 115%, 0);
+  opacity: 0;
+  will-change: transform, opacity;
+  transition-property: transform, opacity;
+  transition-timing-function: var(--ease-air-out);
+}
+
+.clip-line-inner.is-revealed {
+  transform: translate3d(0, 0%, 0);
+  opacity: 1;
+}
+
+.word-fade-inner {
+  display: inline-block;
+  transform: translate3d(0, 18px, 0);
+  opacity: 0;
+  will-change: transform, opacity;
+  transition-property: transform, opacity;
+  transition-timing-function: var(--ease-air-out);
+}
+
+.word-fade-inner.is-revealed {
+  transform: translate3d(0, 0, 0);
+  opacity: 1;
+}
+
+/* ==================== 3. MATRIZ DE PUNTOS CON VIÑETA + BORDE LUMINOSO GIRATORIO ==================== */
+.air-dot-grid {
+  background-image: radial-gradient(rgba(28, 71, 196, 0.16) 1px, transparent 1px);
+  background-size: 20px 20px;
+  background-position: center center;
+  mask-image: radial-gradient(
+    ellipse 68% 58% at 50% 50%,
+    #000 60%,
+    transparent 100%
+  );
+}
+
+.dark .air-dot-grid {
+  background-image: radial-gradient(rgba(125, 211, 252, 0.14) 1px, transparent 1px);
+}
+
+@keyframes air-border-spin {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+.air-animated-border {
+  position: relative;
+  isolation: isolate;
+}
+
+.air-animated-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(
+    from 0deg,
+    rgba(var(--siga-spin-rgb), 0.12) 0deg,
+    rgba(var(--siga-spin-rgb), 0.85) 75deg,
+    rgba(var(--siga-spin-rgb), 0.95) 140deg,
+    rgba(223, 230, 239, 0.2) 220deg,
+    rgba(var(--siga-spin-rgb), 0.12) 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Variante con rotación continua estilo AnimatedBorder_rotate */
+.air-animated-border-spin {
+  position: relative;
+  overflow: hidden;
+  padding: 1.5px;
+}
+
+.air-animated-border-spin::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 180%;
+  aspect-ratio: 1 / 1;
+  background: conic-gradient(
+    rgba(var(--siga-spin-rgb), 0.08) 0deg,
+    rgba(var(--siga-spin-rgb), 0.85) 65deg,
+    rgba(var(--siga-spin-rgb), 0.95) 130deg,
+    rgba(var(--siga-spin-rgb), 0.08) 210deg,
+    rgba(var(--siga-spin-rgb), 0.65) 295deg,
+    rgba(var(--siga-spin-rgb), 0.08) 360deg
+  );
+  animation: air-border-spin 18s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.siga-scroll-brand {
+  color: var(--siga-scroll-brand);
+}
+
+/* ==================== 4. TABBAR CON PÍLDORA MORPHING Y TEMPORIZADOR DE 5S ==================== */
+@keyframes air-tab-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.air-tab-progress-bar {
+  transform-origin: left center;
+  animation: air-tab-progress 5000ms linear forwards;
+}
+
+.air-tab-progress-paused {
+  animation-play-state: paused;
+}
+
+/* ==================== 5. ESCENARIO 3D CON INCLINACIÓN DEL MOUSE (PrimaryProductDemo) ==================== */
+.air-3d-perspective {
+  perspective: 900px;
+}
+
+.air-3d-card {
+  transform-style: preserve-3d;
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.air-3d-layer-front {
+  transform: translateZ(32px);
+  transform-style: preserve-3d;
+}
+
+.air-3d-layer-back {
+  transform: translateZ(-36px) scale(0.96);
+}
+
+/* ==================== 6. ORBES DE LUZ ROTATORIOS (CTACard_root_orbs) ==================== */
+@keyframes air-orb-rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes air-orb-pulse {
+  0% {
+    transform: scale(0.75);
+  }
+  100% {
+    transform: scale(1.35);
+  }
+}
+
+.air-cta-orbs {
+  animation: air-orb-rotate 14s linear infinite;
+}
+
+.air-cta-orb-1 {
+  background: radial-gradient(circle, rgba(28, 71, 196, 0.72) 0%, rgba(28, 71, 196, 0) 70%);
+  animation: air-orb-pulse 4.5s ease-in-out infinite alternate;
+}
+
+.air-cta-orb-2 {
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.52) 0%, rgba(56, 189, 248, 0) 70%);
+  animation: air-orb-pulse 5.5s ease-in-out 1s infinite alternate;
+}
+
+.air-cta-orb-3 {
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.5) 0%, rgba(99, 102, 241, 0) 70%);
+  animation: air-orb-pulse 6s ease-in-out 2s infinite alternate;
+}
+
+/* ==================== 7. MARQUEE DE ALIADOS ==================== */
+@keyframes siga-marquee {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.siga-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: siga-marquee 42s linear infinite;
+}
+
+.siga-marquee-track:hover,
+.siga-marquee-track:focus-within {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .siga-inview-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .air-phrase-reveal,
+  .clip-line-inner,
+  .word-fade-inner {
+    transition-duration: 0.01ms !important;
+    transform: none !important;
+    opacity: 1 !important;
+  }
+  .siga-marquee-track,
+  .air-animated-border-spin::before,
+  .air-cta-orbs,
+  .air-cta-orb-1,
+  .air-cta-orb-2,
+  .air-cta-orb-3,
+  .air-tab-progress-bar {
+    animation: none !important;
+  }
+}

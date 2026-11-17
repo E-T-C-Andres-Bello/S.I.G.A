@@ -7,7 +7,7 @@
 [![Status: Architecture & Provisioning](https://img.shields.io/badge/Estado-Arquitectura%20y%20Planificaci%C3%B3n-orange.svg)](#estado-actual-del-proyecto)
 [![Community Service: UNEG](https://img.shields.io/badge/Servicio%20Comunitario-UNEG%20Ingenier%C3%ADa%20Inform%C3%A1tica-green.svg)](#equipo-de-desarrollo)
 
-Plataforma web y PWA *offline-first* de código abierto para la gestión integral, automatización y optimización de los flujos académicos, administrativos, estudiantiles, de pasantías, biblioteca, comedor (PAE) y mantenimiento operativo de la **E.T.C. "Andrés Bello"** (~1.300 estudiantes, 1.º a 6.º año en menciones técnicas de **Telemática**, **Aduanas** y **Turismo**), alineada con los estándares y formatos oficiales del **MPPE** y **CDCE**.
+Plataforma web y PWA *offline-first* de código abierto para la gestión integral, automatización y optimización de los flujos académicos, administrativos, estudiantiles, de orientación, pasantías y biblioteca de la **E.T.C. "Andrés Bello"** (~1.300 estudiantes, 1.º a 6.º año en menciones técnicas de **Telemática**, **Aduanas** y **Turismo**), alineada con los estándares y formatos oficiales del **MPPE** y **CDCE**.
 
 ---
 
@@ -52,7 +52,7 @@ SIGA adopta una arquitectura **monolítica *serverless* full-stack** sobre Next.
 | :--- | :--- | :--- |
 | **Runtime y Endpoints** | **Node.js (Next.js Server Actions & Route Handlers)** | API REST y mutaciones *serverless* integradas sin servidor backend independiente. |
 | **Acceso a Datos / ORM** | **Prisma ORM o Drizzle ORM + `@supabase/supabase-js`** | Modelado relacional tipado, migraciones limpias y consultas nativas a PostgreSQL. |
-| **Tareas Programadas (Cron)** | **GitHub Actions / Inngest** | Ejecución asíncrona de resúmenes semanales, alertas de biblioteca y mantenimiento programado. |
+| **Tareas Programadas (Cron)** | **GitHub Actions / Inngest** | Ejecución asíncrona de resúmenes semanales, alertas de biblioteca y tareas programadas. |
 
 ### 3. Base de Datos, Autenticación y Tiempo Real (BaaS)
 | Componente | Tecnología | Propósito Técnico |
@@ -61,23 +61,22 @@ SIGA adopta una arquitectura **monolítica *serverless* full-stack** sobre Next.
 | **Seguridad a Nivel de Fila** | **PostgreSQL Row Level Security (RLS)** | Aislamiento estricto por rol: estudiantes solo leen sus notas; docentes solo editan sus secciones asignadas. |
 | **Autenticación** | **Supabase Auth / OAuth** | Cédula/Correo + contraseña, Google OAuth (`@etcandresbello.org`) y *Magic Links* sin registro para tutores externos. |
 | **Base Vectorial (RAG)** | **Extensión `pgvector`** | Almacenamiento de *embeddings* de guías docentes y libros dentro del mismo PostgreSQL para el Tutor IA. |
-| **Eventos en Tiempo Real** | **Supabase Realtime** | Actualización instantánea en pantalla de tickets de mantenimiento y alertas de portería sin recargar. |
+| **Eventos en Tiempo Real** | **Supabase Realtime** | Actualización instantánea de notificaciones académicas, trámites y alertas escolares sin recargar. |
 
 ### 4. Almacenamiento Híbrido y Generación de Documentos
 | Componente | Tecnología | Propósito Técnico |
 | :--- | :--- | :--- |
 | **Generación de PDFs** | **`@react-pdf/renderer` (Client-Side)** | Ensamblaje de boletines, constancias y formatos MPPE en el navegador (**0 MB** de almacenamiento/cómputo en servidor). |
-| **Códigos QR** | **`qrcode.react` + `html5-qrcode`** | Emisión y lectura vía cámara móvil para carnets, aulas/mantenimiento, biblioteca y verificación de documentos. |
+| **Códigos QR** | **`qrcode.react` + `html5-qrcode`** | Emisión y lectura vía cámara móvil para carnets estudiantiles, asistencia, biblioteca y verificación de documentos. |
 | **Hojas de Cálculo** | **SheetJS (`xlsx`)** | Importación masiva de matrícula y exportación de estadísticas oficiales para Zona Educativa / CDCE. |
-| **Imágenes y Archivos** | **Supabase Storage / Cloudinary + `browser-image-compression`** | Compresión previa en cliente a formato `.webp` para fotos tipo carnet, portadas y evidencias de averías. |
+| **Imágenes y Archivos** | **Supabase Storage / Cloudinary + `browser-image-compression`** | Compresión previa en cliente a formato `.webp` para fotos tipo carnet y portadas de biblioteca. |
 | **Documentos Pesados** | **Google Drive API** | Almacenamiento de informes de pasantías en PDF de 6.º año fuera de la cuota de base de datos/storage transaccional. |
 
-### 5. Capa de Inteligencia Artificial y Voz
+### 5. Capa de Inteligencia Artificial
 | Componente | Tecnología | Propósito Técnico |
 | :--- | :--- | :--- |
 | **Orquestación LLM** | **Vercel AI SDK (`ai`)** | Respuestas en *streaming* para chats y salidas estructuradas en JSON. |
-| **Modelo Multimodal** | **Google Gemini API (`@google/genai` — Gemini 2.5 Flash)** | OCR de documentos, generación de evaluaciones, revisión normativa, visión artificial y Tutor Socrático. |
-| **Voz a Texto (STT)** | **Web Speech API + Groq Cloud (`Whisper Large v3`)** | Transcripción de notas de voz para respuesta rápida de tickets por personal obrero y de vigilancia. |
+| **Modelo Multimodal** | **Google Gemini API (`@google/genai` — Gemini 2.5 Flash)** | OCR de documentos, generación de evaluaciones, revisión normativa, análisis predictivo y Tutor Socrático. |
 
 ---
 
@@ -105,8 +104,13 @@ SIGA adopta una arquitectura **monolítica *serverless* full-stack** sobre Next.
 - **Contenidos y Buzón de Tareas:** Publicación modular (PDFs, presentaciones, videos embebidos YouTube/Drive y fragmentos de código para Telemática) y entregas con fecha/hora de cierre estricta y detección de entregas tardías.
 - **Motor de Evaluaciones Online:** Exámenes de selección simple, verdadero/falso, emparejamiento y desarrollo con límite de tiempo y aleatorización de preguntas. Sincronización automática de la nota obtenida hacia la planilla oficial de Control de Estudios.
 
-### 4. Gestión de Biblioteca (Integración BookNest)
-- Implementación de **BookNest** para inventario bibliográfico, control de préstamos domiciliarios con alertas de vencimiento y gestión de préstamos de equipos audiovisuales (videobeams, laptops, cornetas) para docentes.
+### 4. Gestión de Biblioteca Escolar (Nativo en SIGA)
+- Módulo propio integrado en SIGA para inventario bibliográfico digital con código QR por ejemplar, control de préstamos domiciliarios mediante el Carnet Digital estudiantil con alertas de vencimiento y gestión de reserva/entrega de equipos audiovisuales (videobeams, laptops, cornetas) para docentes.
+
+### 4.1 Entornos Exclusivos por Mención Técnica (1.º a 6.º Año)
+- **Telemática:** *Sandbox* de código y SQL en el Aula Virtual, herramientas prácticas de direccionamiento IP y cableado estructurado (T568A/B), y bitácora técnica de diagnóstico/mantenimiento del laboratorio TI.
+- **Aduanas:** Simulador de clasificación arancelaria (Sistema Armonizado), calculadora de valoración aduanera (CIF/FOB, Incoterms y tributos) y taller documental con facturas comerciales, *Bill of Lading* (B/L) y guías aéreas.
+- **Turismo:** Repositorio de rutas patrimoniales y ecoturísticas de Ciudad Guayana/Bolívar, gestor de eventos protocolares y ferias culturales/gastronómicas, y simulador de recepción hotelera (*check-in/check-out*) con guiones bilingües.
 
 ### 5. Coordinación de Pasantías y Servicio Comunitario (6.º Año)
 - **CRM de Empresas Receptoras:** Directorio de instituciones y empresas aliadas con histórico de cupos por mención (Telemática, Aduanas, Turismo).
@@ -121,7 +125,7 @@ SIGA adopta una arquitectura **monolítica *serverless* full-stack** sobre Next.
 ### 7. Módulo de Estudiantes
 - **Dashboard Gamificado:** Horario interactivo, calendario de evaluaciones, progreso del lapso e insignias por asistencia perfecta o excelencia académica.
 - **Simulador "¿Cuánto necesito para aprobar?":** Cálculo dinámico del puntaje requerido en la próxima evaluación según notas acumuladas.
-- **Carnet Digital Inteligente:** QR dinámico para control de acceso al plantel, biblioteca y pases de salida.
+- **Carnet Digital Inteligente:** QR dinámico para control estudiantil, biblioteca y trámites internos.
 - **Trámites Express:** Solicitud de constancias, solvencias y revisiones de notas con notificación de estado.
 
 ### 8. Módulo de Representantes (Padres y Madres)
@@ -129,15 +133,8 @@ SIGA adopta una arquitectura **monolítica *serverless* full-stack** sobre Next.
 - **Alertas Tempranas Inmediatas:** Notificaciones automáticas vía Push, Telegram o correo ante inasistencia a primera hora, remisión a Orientación o publicación de calificaciones.
 - **Citaciones Digitales con Acuse de Recibo:** Registro exacto de fecha y hora de apertura de la citación en el dispositivo del representante.
 
-### 9. Personal Obrero, Mantenimiento, Infraestructura y Vigilancia
-- **Helpdesk por QR de Espacios:** Etiquetas QR en aulas, laboratorios, baños y talleres; cualquier docente escanea el espacio, selecciona la falla y adjunta fotografía.
-- **Interfaz Móvil Simplificada:** Botones de alto contraste e ingreso de reportes/repuestos mediante notas de voz transcritas automáticamente.
-- **Planificador de Guardias, Aseo e Insumos:** Rutinas diarias por áreas y control de inventario (cloro, desinfectante, escobas, bombillos, herramientas).
-- **Control de Portería y Pases de Salida:** Emisión digital de autorización por Coordinación; el vigilante escanea el carnet del estudiante para validar en tiempo real la salida y la identidad del representante autorizado.
-
-### 10. Bienestar Estudiantil, Orientación y PAE (Comedor)
-- **Gestión Inteligente del PAE:** Control de inventario diario de alimentos (kg/litros de entrada y salida) y cálculo automático de raciones basado en la asistencia real registrada en la mañana para evitar mermas o desvíos.
-- **Expediente Confidencial de Orientación:** Registro cifrado de actas de compromiso, acuerdos de convivencia, vulnerabilidades socioeconómicas y seguimiento psicopedagógico.
+### 9. Orientación y Psicopedagogía (Integrado en Control de Estudios y Seguimiento Estudiantil)
+- **Expediente Confidencial de Orientación:** Registro cifrado e integrado a Control de Estudios/Coordinación para actas de compromiso, acuerdos de convivencia, vulnerabilidades socioeconómicas y seguimiento psicopedagógico con acceso restringido.
 
 ---
 
@@ -154,7 +151,6 @@ SIGA adopta una arquitectura **monolítica *serverless* full-stack** sobre Next.
 | **Revisor Normativo de Informes** | Pasantías | Validación automatizada de borradores contra lineamientos de la E.T.C. Andrés Bello (tercera persona, tiempos verbales en pasado, estructura de capítulos y coherencia). |
 | **Planificador y Observaciones Cualitativas** | Docente | Sugerencia de estrategias/indicadores sobre temas MPPE y redacción personalizada de observaciones para boletines a partir de notas y asistencia. |
 | **Resumen Semanal para Representantes** | Representantes / Cron | Job programado (viernes 5:00 PM) que sintetiza asistencia, notas recientes, entregas y próximos exámenes en un resumen ejecutivo de 5 líneas. |
-| **Clasificador Visual de Urgencias y STT** | Mantenimiento | Visión artificial (`Gemini 2.5 Flash`) clasifica fallas críticas/peligrosas desde la foto del ticket y dispara alertas inmediatas; `Web Speech API` + `Groq Whisper Large v3` transcribe notas de voz de obreros. |
 
 ---
 
@@ -166,7 +162,7 @@ SIGA adopta una arquitectura **monolítica *serverless* full-stack** sobre Next.
 
 ### Optimización de Cuotas y Ancho de Banda
 1. **0 MB en PDFs oficiales:** Los reportes y certificaciones se renderizan íntegramente en el navegador del cliente mediante `@react-pdf/renderer` a partir de datos JSON consultados en PostgreSQL.
-2. **Compresión de imágenes en cliente:** Las fotografías (carnets, portadas, reportes de fallas) se comprimen a `.webp` en el navegador (`browser-image-compression`) antes de enviarse a Storage/Cloudinary.
+2. **Compresión de imágenes en cliente:** Las fotografías (carnets y portadas de biblioteca) se comprimen a `.webp` en el navegador (`browser-image-compression`) antes de enviarse a Storage/Cloudinary.
 3. **Descarga de archivos pesados:** Los informes extensos de pasantías en PDF se enrutan directamente hacia el almacenamiento institucional mediante **Google Drive API**.
 
 ---
@@ -185,7 +181,7 @@ SIGA adopta una arquitectura **monolítica *serverless* full-stack** sobre Next.
 Para inicializar el entorno productivo y alimentar los motores de reglas, generación de documentos y prompts de IA, el sistema requiere los siguientes conjuntos de datos maestros:
 
 1. **Configuración Institucional y Legal:**
-   - Códigos oficiales ante MPPE (Código DEA `OD01340701`, Código de Dependencia), Código CNAE/PAE y RIF.
+   - Códigos oficiales ante MPPE (Código DEA `OD01340701`, Código de Dependencia) y RIF.
    - Credenciales y datos de autoridades firmantes (Director/a, Subdirectores Académico y Administrativo/Técnico, Coordinador/a de Control de Estudios) y decretos/resoluciones de nombramiento.
    - Activos gráficos oficiales (escudo/logo vectorial y cintillos MPPE/CDCE) y configuración de subdominio sobre `etcandresbello.org`.
 2. **Núcleo Académico y Reglas de Negocio:**
@@ -194,15 +190,13 @@ Para inicializar el entorno productivo y alimentar los motores de reglas, genera
    - Reglas de cálculo de promedios, redondeos, equivalencias literales (CRP / Orientación) y normativa de Materias Pendientes y revisiones.
 3. **Semilla de Base de Datos (Importación vía SheetJS):**
    - Nómina de estudiantes (cédula de identidad/escolar, datos demográficos, año, sección, mención) y datos de representantes.
-   - Plantilla de personal docente (carga académica por materia/sección), administrativo, coordinadores, bibliotecarios, personal PAE, vigilancia y obrero.
+   - Plantilla de personal docente (carga académica por materia/sección), administrativo, coordinadores, orientadores y bibliotecarios.
    - Bloques horarios de clases y horarios por sección.
 4. **Núcleo Técnico (Pasantías 6.º Año):**
    - Formatos de postulación, aceptación, actas de supervisión y rúbricas de evaluación empresarial.
    - Manual/normativa vigente del Informe de Pasantías (estructura de capítulos, márgenes y reglas de estilo para el revisor IA) y directorio histórico de empresas receptoras.
-5. **Infraestructura Física, Biblioteca y Comedor:**
-   - Taxonomía/nomenclatura exacta de espacios físicos (aulas, laboratorios, talleres, baños, oficinas, canchas) para la generación masiva de etiquetas QR.
-   - Inventario bibliográfico, reglas de préstamo y catálogo de equipos audiovisuales.
-   - Estructura diaria de reporte PAE (almuerzos servidos, pesaje de insumos en kg/l, menú diario).
+5. **Biblioteca Escolar:**
+   - Inventario bibliográfico, reglas de préstamo domiciliario y catálogo de equipos audiovisuales.
 
 ---
 
@@ -210,19 +204,34 @@ Para inicializar el entorno productivo y alimentar los motores de reglas, genera
 
 - **CI/CD y Control de Versiones:** Git & GitHub con flujos automatizados mediante **GitHub Actions** (incluyendo tareas programadas de mantenimiento y respaldo).
 - **Hosting, Edge y Seguridad Perimetral:** Despliegue continuo en **Cloudflare Pages / Workers** (bajo **Project Galileo**) y **Netlify / Vercel**, conectado al dominio institucional `etcandresbello.org` con protección WAF y resolución **Cloudflare DNS**.
-- **Monitoreo de Errores:** **Sentry** integrado para captura y trazabilidad en tiempo real de excepciones en cliente y servidor.
+- **Monitoreo de Errores y Analítica de Producto:** **Sentry** para captura y trazabilidad en tiempo real de excepciones en cliente y servidor, junto a **PostHog** para analítica de uso, métricas de rendimiento y telemetría académica.
 - **Canales de Mensajería y Alertas:**
   - **Correos Transaccionales:** **Mailtrap (Email Delivery API / SMTP)** + **React Email** (complementado por SMTP institucional de Google Workspace) para envío de boletines, notificaciones y recuperación de credenciales.
   - **Alertas Instantáneas:** **Telegram Bot API** para notificaciones en tiempo real hacia representantes y docentes, complementado con notificaciones Push web.
 
 ---
 
+## Landing Page Propio y Estructura del Repositorio
+
+SIGA contará con un **Landing Page propio** (`src/app/(landing)/`) diseñado específicamente para presentar la plataforma ante la comunidad educativa de la **E.T.C. "Andrés Bello"**, integrando identidad institucional, acceso por roles, verificador público QR, módulos por mención y patrocinadores tecnológicos.
+
+- **Contexto institucional migrado:** [`docs/CONTEXTO_INSTITUCIONAL.md`](docs/CONTEXTO_INSTITUCIONAL.md)
+- **Estructura de carpetas y rutas del stack:** [`docs/ESTRUCTURA_PROYECTO.md`](docs/ESTRUCTURA_PROYECTO.md)
+
+---
+
 ## Patrocinadores y Aliados Tecnológicos
 
-Este proyecto educativo sin fines de lucro es posible gracias al apoyo de iniciativas de código abierto y programas educativos:
+Este proyecto educativo sin fines de lucro es posible gracias al apoyo de iniciativas de código abierto y programas educativos verificados en el portal institucional:
 
-- **Cloudflare (Project Galileo):** Protección perimetral Business, DNS e infraestructura Edge para `etcandresbello.org`.
-- **Mailtrap:** Infraestructura de entrega de correos transaccionales y entornos de prueba (Sandbox).
+- **GitHub:** Control de versiones, repositorio *open source* y automatización CI/CD.
+- **Cloudflare (Project Galileo):** Aceleración global, protección WAF, DNS e infraestructura Edge para `etcandresbello.org`.
+- **Supabase:** Base de datos PostgreSQL en tiempo real, autenticación estudiantil, `pgvector` y respaldo seguro.
+- **Google Workspace for Education:** Cuentas institucionales (`@etcandresbello.org`), colaboración académica y almacenamiento documental.
+- **Mailtrap:** Infraestructura patrocinada (planes Básico y Teams) para pruebas seguras y entrega de correos transaccionales escolares.
+- **PostHog:** Analítica de producto, métricas de rendimiento y telemetría académica de SIGA.
+- **Figma (Educación K12):** Diseño de interfaces y prototipado UI/UX colaborativo.
+- **Sentry (Educación / Open Source):** Monitoreo de errores, trazabilidad y diagnóstico en tiempo real.
 - **Hosting & Despliegue Open Source:** [This site is powered by Netlify](https://www.netlify.com) / Vercel.
 
 ---
