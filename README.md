@@ -16,19 +16,6 @@ Plataforma web y PWA *offline-first* de código abierto para la gestión integra
 > **Fase Actual: En Construcción — Desarrollo Activo e Implementación Modular (`Pre-Alpha`)**  
 > La etapa de arquitectura inicial y provisión de base de datos ha concluido. El repositorio se encuentra actualmente en **fase de construcción iterativa** por parte del equipo de desarrollo, con el núcleo de autenticación, seguridad y el primer módulo operativo ya implementados.
 
-### Avance de Implementación (Hitos Completados vs. En Curso)
-
-| Capa / Módulo | Estado | Detalle técnico implementado |
-| :--- | :--- | :--- |
-| **Base de Datos y Seguridad (Supabase)** | Completado (Baseline) | Esquema relacional DDL (`00001_initial_baseline.sql`), catálogos base, políticas **RLS** multi-rol, RPCs `SECURITY DEFINER` y tipado sincronizado (`database.types.ts`). |
-| **Landing Institucional y Autenticación** | Completado | Portada propia (`/`), acceso con Google Workspace (`@etcandresbello.org`) y credenciales con verificación estricta *fail-closed* contra matrícula y roles. |
-| **Shell Privado y Sistema Visual** | Completado | Contenedor compartido `(dashboard)` con *Curved Glass Sidebar*, personalizador Glassmorphism en vivo, tema claro/oscuro, pantallas globales de carga y error. |
-| **Módulo de Estudiantes (`/estudiante`)** | En Construcción (Base Operativa) | Dashboard principal con indicadores reales bajo RLS, agenda semanal interactiva y bloque `SigaAnalyticsBento` (curva MPPE, ondas, treemap curricular y radar). |
-| **Docente, Control de Estudios y Dirección** | En Desarrollo Paralelo | Rutas base y plantillas por rol (`/docente`, `/control-estudios`, `/analitica`, `/orientacion`, `/pasantias`, `/biblioteca`, `/representante`) listas para implementación funcional del equipo. |
-| **IA, PDFs Client-Side y PWA Offline** | Planificado | Integración pendiente de Gemini 2.5 Flash, generación PDF (`@react-pdf/renderer`) y cola de sincronización offline (`@serwist/next` + `IndexedDB`). |
-
-El sistema está siendo diseñado por estudiantes de **Ingeniería Informática de la Universidad Nacional Experimental de Guayana (UNEG)** como proyecto de Servicio Comunitario, con el doble objetivo de digitalizar los procesos administrativos del plantel a costo cero y servir como arquitectura de referencia viva para cientos de estudiantes de bachillerato técnico de la mención **Telemática**.
-
 ---
 
 ## Tabla de Contenidos
