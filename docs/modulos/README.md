@@ -13,8 +13,9 @@ S.I.G.A. se organiza estrictamente en **tres bloques de usuarios** y un **modelo
 | :--- | :--- | :--- |
 | [00-MODELO-RELACIONAL-BD.md](./00-MODELO-RELACIONAL-BD.md) | Diseño completo de tablas, claves, relaciones, **tabla exclusiva de `roles`**, permisos RBAC, políticas RLS, auditoría inmutable y arquitectura híbrida **Supabase + Neon**. | Arquitectura / BD |
 | [01-ALUMNOS.md](./01-ALUMNOS.md) | Especificación detallada (*qué se quiere*, *qué se hace* y *cómo se construye*) de todos los módulos estudiantiles, incluyendo acceso provisional por cédula vs. `@etcandresbello.org`. | `estudiante` |
-| [02-DOCENTES.md](./02-DOCENTES.md) | Especificación detallada de planificación IA, asistencia *Offline-First* / QR, plan de evaluación ponderado, Aula Virtual, menciones, observaciones de boletín, tutoría de pasantías y reservas audiovisuales. | `docente` |
+| [02-DOCENTES.md](./02-DOCENTES.md) | Especificación detallada de planificación IA, asistencia *Offline-First* / QR, plan de evaluación ponderado, gestión en Aula Virtual, menciones, observaciones de boletín, tutoría de pasantías y reservas audiovisuales. | `docente` |
 | [03-ADMINISTRACION.md](./03-ADMINISTRACION.md) | Especificación detallada de Dirección/BI, Coordinación de Mención, Control de Estudios/Secretaría, Orientación confidencial, Coordinación de Pasantías, Biblioteca y Administración RBAC. | `direccion`, `coordinador_mencion`, `control_estudios`, `orientacion`, `coordinador_pasantias`, `biblioteca` |
+| [04-AULA-VIRTUAL.md](./04-AULA-VIRTUAL.md) | **Especificación unificada del Aula Virtual (`/aula-virtual`)**: campus único compartido dentro de S.I.G.A. para todos los alumnos y docentes, salas `[courseId]`, sincronización con planillas MPPE, Tutor IA RAG y laboratorios por mención. | `estudiante`, `docente`, `coordinador_mencion`, `direccion` |
 
 ### Exclusiones Explícitas de Alcance
 Para mantener la arquitectura enfocada y libre de complejidad innecesaria, quedan **fuera del alcance** de S.I.G.A.:
@@ -40,3 +41,5 @@ Para mantener la arquitectura enfocada y libre de complejidad innecesaria, queda
 4. **Offline-First, PDF Client-Side y Verificación Pública `/verificar`:**
    - Pase de asistencia en aula funciona sin internet mediante **PWA + IndexedDB** con claves de idempotencia (`client_mutation_id`).
    - Boletines, constancias, certificaciones MPPE y cartas de pasantía se generan en el navegador con **`@react-pdf/renderer`** (0 MB en servidor) y llevan firma hash + código QR verificable públicamente en `/verificar`.
+5. **Aula Virtual Unificada dentro de S.I.G.A. (`/aula-virtual`):**
+   - No se construye como una aplicación externa ni subdominio separado (`aula.*`), ni se fragmentan las materias por menciones. Todos los estudiantes y docentes confluyen en el campus único `/aula-virtual` y `/aula-virtual/[courseId]`, donde PostgreSQL RLS filtra automáticamente cursos por matrícula (`enrollments`) y asignaciones docentes (`teacher_assignments`). Los entornos de `telematica`, `aduanas` y `turismo` viven integrados dentro de `/aula-virtual` como laboratorios prácticos complementarios. Ver [04-AULA-VIRTUAL.md](./04-AULA-VIRTUAL.md).

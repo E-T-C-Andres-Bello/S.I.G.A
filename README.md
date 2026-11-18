@@ -82,7 +82,7 @@ SIGA adopta una arquitectura **monolítica *serverless* full-stack** sobre Next.
 ## Módulos del Sistema
 
 ### 1. Control de Estudios y Secretaría (Administrativos)
-- **Periodos y Mallas Curriculares Dinámicas:** Apertura/cierre de años escolares divididos en 3 Momentos Pedagógicos y configuración flexible de menciones técnicas (1.º a 3.º ciclo básico; 4.º a 6.º Telemática, Aduanas y Turismo).
+- **Periodos y Mallas Curriculares Dinámicas:** Apertura/cierre de años escolares divididos en 3 Momentos Pedagógicos y configuración flexible de menciones técnicas (formación continua de 1.º a 6.º año en Telemática, Aduanas y Turismo).
 - **Inscripción, Prosecución y Expediente Digital:** Registro de nuevos ingresos (1.er año) y prosecución automática (2.º a 6.º año) basada en reglas de prelación y materias aprobadas. Incluye ficha socioeconómica, médica/alergias, tallas y documentos digitalizados.
 - **Motor de Calificaciones y Auditoría MPPE:**
   - Escala numérica (1–20) para áreas de formación y escala literal (`A`, `B`, `C`, `D`, `E`) para grupos CRP y Orientación y Convivencia.
@@ -98,15 +98,17 @@ SIGA adopta una arquitectura **monolítica *serverless* full-stack** sobre Next.
 - **Auditoría de Rendimiento ("Materias Filtro"):** Mapas de calor estadísticos por sección y asignatura para detectar anomalías pedagógicas (ej. tasa de reprobación atípica en una sección frente a sus pares).
 - **Reportes Oficiales Automatizados:** Exportación en Excel/PDF de matrícula inicial, ingresos, egresos, repitientes, aprobados y aplazados desagregados por sexo, edad, año y mención para Zona Educativa / CDCE.
 
-### 3. Aula Virtual (LMS Integrado)
-- **Matriculación Automática:** Al inscribir al estudiante en un año/mención, queda suscrito automáticamente a las aulas virtuales de todas sus asignaturas sin códigos de invitación.
-- **Contenidos y Buzón de Tareas:** Publicación modular (PDFs, presentaciones, videos embebidos YouTube/Drive y fragmentos de código para Telemática) y entregas con fecha/hora de cierre estricta y detección de entregas tardías.
-- **Motor de Evaluaciones Online:** Exámenes de selección simple, verdadero/falso, emparejamiento y desarrollo con límite de tiempo y aleatorización de preguntas. Sincronización automática de la nota obtenida hacia la planilla oficial de Control de Estudios.
+### 3. Aula Virtual Unificada (LMS Integrado dentro de S.I.G.A.)
+- **Campus Único Compartido (`/aula-virtual`):** Todos los estudiantes (1.º a 6.º año) y todos los docentes de la institución interactúan dentro de un único LMS integrado en S.I.G.A. (sin aplicación separada ni subdominio externo independiente), manteniendo una sola sesión y sincronización directa con notas y matrícula.
+- **Matriculación Automática:** Al inscribir al estudiante en un año/mención/sección, queda suscrito automáticamente a los cursos publicados (`virtual_courses`) de todas sus asignaturas y profesores correspondientes, sin códigos de invitación.
+- **Sala Única por Materia (`/aula-virtual/[courseId]`):** Espacio compartido entre docente y sección para publicación modular (PDFs, presentaciones, videos embebidos y guías RAG), buzón de tareas con detección de entregas tardías y Tutor Socrático IA.
+- **Motor de Evaluaciones Online:** Exámenes cronometrados servidos de forma segura vía RPC (`siga_get_exam_questions_student` y `siga_submit_exam_attempt`), con sincronización automática de calificaciones hacia la planilla oficial de Control de Estudios (`student_scores`).
 
 ### 4. Gestión de Biblioteca Escolar (Nativo en SIGA)
 - Módulo propio integrado en SIGA para inventario bibliográfico digital con código QR por ejemplar, control de préstamos domiciliarios mediante el Carnet Digital estudiantil con alertas de vencimiento y gestión de reserva/entrega de equipos audiovisuales (videobeams, laptops, cornetas) para docentes.
 
-### 4.1 Entornos Exclusivos por Mención Técnica (1.º a 6.º Año)
+### 4.1 Laboratorios Prácticos por Mención Técnica (Integrados en `/aula-virtual`)
+Complementan las materias técnicas desde `/aula-virtual/{telematica,aduanas,turismo}` sin dividir el campus principal:
 - **Telemática:** *Sandbox* de código y SQL apoyado en ramas aisladas (*branching*) sobre **Neon PostgreSQL Serverless**, herramientas prácticas de direccionamiento IP y cableado estructurado (T568A/B), y bitácora técnica de diagnóstico/mantenimiento del laboratorio TI.
 - **Aduanas:** Simulador de clasificación arancelaria (Sistema Armonizado), calculadora de valoración aduanera (CIF/FOB, Incoterms y tributos) y taller documental con facturas comerciales, *Bill of Lading* (B/L) y guías aéreas.
 - **Turismo:** Repositorio de rutas patrimoniales y ecoturísticas de Ciudad Guayana/Bolívar, gestor de eventos protocolares y ferias culturales/gastronómicas, y simulador de recepción hotelera (*check-in/check-out*) con guiones bilingües.
@@ -216,6 +218,7 @@ SIGA cuenta con un **Landing Page propio** (`src/app/(landing)/`) diseñado espe
 
 - **Contexto institucional migrado:** [`docs/CONTEXTO_INSTITUCIONAL.md`](docs/CONTEXTO_INSTITUCIONAL.md)
 - **Estructura de carpetas y rutas del stack:** [`docs/ESTRUCTURA_PROYECTO.md`](docs/ESTRUCTURA_PROYECTO.md)
+- **Especificación del Aula Virtual Unificada:** [`docs/modulos/04-AULA-VIRTUAL.md`](docs/modulos/04-AULA-VIRTUAL.md)
 - **Arquitectura híbrida Supabase + Neon (Edge Functions):** [`docs/ARQUITECTURA_SUPABASE_NEON.md`](docs/ARQUITECTURA_SUPABASE_NEON.md)
 
 ---

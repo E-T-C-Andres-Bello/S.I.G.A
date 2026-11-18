@@ -34,10 +34,12 @@ S.I.G.A/
     │   │   ├── control-estudios/          # Periodos, inscripción OCR, prosecución, notas MPPE y PDFs/QR
     │   │   │   └── orientacion/           # Expediente confidencial de Orientación y Psicopedagogía
     │   │   ├── analitica/                 # BI, SLA Tracker, materias filtro, alerta temprana y CDCE
-    │   │   ├── aula-virtual/              # LMS integrado, evaluaciones online y Tutor Socrático RAG
-    │   │   │   ├── telematica/            # Entorno exclusivo Telemática (sandbox código/SQL, redes/IP, bitácora TI)
-    │   │   │   ├── aduanas/               # Entorno exclusivo Aduanas (arancel, CIF/FOB, documentos B/L)
-    │   │   │   └── turismo/               # Entorno exclusivo Turismo (rutas Guayana, eventos, recepción hotelera)
+    │   │   ├── aula-virtual/              # Campus LMS único compartido dentro de SIGA (alumnos y docentes en /aula-virtual)
+    │   │   │   ├── page.tsx               # Directorio unificado de cursos según rol (enrollments / teacher_assignments)
+    │   │   │   ├── [courseId]/page.tsx    # Sala compartida de materia: módulos, entregas, exámenes y Tutor IA RAG
+    │   │   │   ├── telematica/            # Laboratorio práctico Telemática (sandbox código/SQL, redes/IP, bitácora TI)
+    │   │   │   ├── aduanas/               # Laboratorio práctico Aduanas (arancel, CIF/FOB, documentos B/L)
+    │   │   │   └── turismo/               # Laboratorio práctico Turismo (rutas Guayana, eventos, recepción hotelera)
     │   │   ├── biblioteca/                # Gestión nativa de biblioteca escolar y equipos audiovisuales
     │   │   ├── pasantias/                 # 6.º año: CRM empresas, matchmaking, bitácora, revisor IA y Magic Link
     │   │   ├── docente/                   # Planificación IA, asistencia Offline-First/QR, notas ponderadas y diario de clases
@@ -79,7 +81,7 @@ S.I.G.A/
 ## Decisiones Estructurales Clave
 
 1. **Separación `(landing)` vs `(dashboard)`:** El *Route Group* `src/app/(landing)/` aloja el Landing Page propio de SIGA para la E.T.C. "Andrés Bello" (con estética alineada al portal institucional, enfoque funcional para la comunidad, menciones exclusivas, patrocinadores y enlace a `/verificar`), totalmente desacoplado de las rutas privadas del sistema escolar en `(dashboard)/`.
-2. **Entornos Exclusivos por Mención:** Tanto en `src/app/(dashboard)/aula-virtual/{telematica,aduanas,turismo}/` como en `src/features/menciones/`, cada especialidad técnica tiene espacio dedicado para sus herramientas prácticas exclusivas desde 1.º hasta 6.º año.
+2. **Aula Virtual Unificada dentro de S.I.G.A. (`/aula-virtual`):** Todos los alumnos y docentes comparten un único campus LMS integrado dentro de S.I.G.A. (`src/app/(dashboard)/aula-virtual/page.tsx` y `[courseId]/page.tsx`), manteniendo sesión única `@etcandresbello.org` y conexión directa con `enrollments`, `teacher_assignments` y `student_scores`. Dentro del mismo espacio, `src/app/(dashboard)/aula-virtual/{telematica,aduanas,turismo}/` y `src/features/menciones/` alojan los laboratorios prácticos especializados por mención técnica desde 1.º hasta 6.º año. Ver [docs/modulos/04-AULA-VIRTUAL.md](./modulos/04-AULA-VIRTUAL.md).
 3. **Biblioteca Nativa sin Dependencias Externas:** `src/app/(dashboard)/biblioteca/` y `src/features/biblioteca/` reemplazan la antigua propuesta de BookNest por un módulo integrado directamente con el Carnet Digital QR y la base de datos PostgreSQL de SIGA.
 4. **Alcance Cerrado y Confidencialidad:** `src/app/(dashboard)/control-estudios/orientacion/` y `src/features/orientacion/` gestionan el seguimiento psicopedagógico cifrado bajo RLS estricto (`orientacion` y `direccion`), habiéndose excluido del alcance los módulos de Representantes, Mantenimiento/Obrero/Portería, PAE (Comedor) y Patrocinios. Ver [docs/modulos/README.md](./modulos/README.md) para el diseño completo de módulos y [docs/modulos/00-MODELO-RELACIONAL-BD.md](./modulos/00-MODELO-RELACIONAL-BD.md) para el esquema relacional y RBAC.
 5. **Cero Bloqueos Offline y Cero Sobrecarga de Storage:** La carpeta `src/lib/offline/` centraliza la cola local en IndexedDB para salones sin luz o sin internet, mientras `src/components/pdf/` y `src/lib/storage/` garantizan PDFs generados en navegador y compresión `.webp` previa a la subida.

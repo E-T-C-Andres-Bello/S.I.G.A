@@ -74,17 +74,18 @@ Centralizar la publicación de materiales y evaluaciones digitales, eliminar por
   - *Pre-Evaluador de Entregas y Detector de Similitudes:* Analiza entregas de texto en `assignment_submissions` comparándolas contra la rúbrica y entre compañeros de la sección para alertar similitudes altas o posible plagio, dejando siempre la calificación definitiva en manos del profesor.
 
 ### 3. ¿Cómo se puede construir?
-- **Rutas y Features:** `src/app/(dashboard)/aula-virtual/` (vista gestión docente), `src/app/(dashboard)/docente/notas/page.tsx`, `src/features/aula-virtual/`, `src/features/control-estudios/`.
+- **Especificación compartida:** Ver [04-AULA-VIRTUAL.md](./04-AULA-VIRTUAL.md).
+- **Rutas y Features unificadas:** `src/app/(dashboard)/aula-virtual/page.tsx` y `src/app/(dashboard)/aula-virtual/[courseId]/page.tsx` (mismo espacio LMS donde entran los estudiantes, mostrando herramientas de creación, publicación y calificación exclusivamente al docente titular de cada `teacher_assignments`), junto a la matriz consolidada en `src/app/(dashboard)/docente/notas/page.tsx`, `src/features/aula-virtual/` y `src/features/control-estudios/`.
 - **Tablas y Seguridad RLS/RPC:**
-  - `virtual_courses`, `course_modules`, `course_materials`, `rag_material_chunks` (índice HNSW `pgvector`), `assignments`, `assignment_submissions`, `online_exams`, `exam_questions` (`correct_answer_json` bloqueado por RLS a estudiantes mientras el examen esté activo), `student_scores`, `moment_final_grades`, `grade_audit_logs`.
-  - RPC `siga_registrar_nota(...)` (`SECURITY DEFINER`, `SET search_path = public, pg_temp`): verifica asignación real del profesor al alumno/materia, verifica ventana abierta en `momentos` (o reapertura autorizada), registra en `grade_audit_logs` (inmutable) y recalcula `moment_final_grades`.
+  - `virtual_courses`, `course_modules`, `course_materials`, `rag_material_chunks` (índice HNSW `pgvector`), `assignments`, `assignment_submissions`, `online_exams`, `exam_questions` (`correct_answer_json` bloqueado por RLS a estudiantes; consumen vía `siga_get_exam_questions_student` y `siga_submit_exam_attempt`), `student_scores`, `moment_final_grades`, `grade_audit_logs`.
+  - RPC `siga_registrar_nota(...)` (`SECURITY DEFINER`, `SET search_path = pg_catalog, public`): verifica asignación real del profesor al alumno/materia, verifica ventana abierta en `momentos` (o reapertura autorizada), registra en `grade_audit_logs` (inmutable) y recalcula `moment_final_grades`.
 
 ---
 
 ## Módulo 2.4 · Gestión de Entornos Prácticos por Mención (*Telemática*, *Aduanas*, *Turismo*)
 
 ### 1. ¿Qué se quiere?
-Permitir al docente de especialidad publicar ejercicios prácticos reales sobre los simuladores de su mención, revisar las resoluciones enviadas por los alumnos y vincular sus notas directamente al plan de evaluación.
+Permitir al docente de especialidad publicar ejercicios prácticos reales sobre los simuladores integrados en `/aula-virtual/{telematica,aduanas,turismo}`, revisar las resoluciones enviadas por los alumnos y vincular sus notas directamente al plan de evaluación.
 
 ### 2. ¿Qué se va a hacer?
 - Selecciona o duplica escenarios del catálogo base en `mention_lab_scenarios` según su mención (ej. un caso de valoración CIF/FOB en Aduanas, una consulta SQL sintética en Telemática o una ruta patrimonial/recepción en Turismo), ajusta instrucciones y fecha límite, y lo asocia a un `evaluation_item_id`.

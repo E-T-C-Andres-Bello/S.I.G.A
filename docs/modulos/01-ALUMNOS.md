@@ -37,7 +37,7 @@ Ofrecer al estudiante un punto único de autogestión académica para consultar 
 ### 2. ¿Qué se va a hacer?
 - **Dashboard Estudiantil Gamificado:** Muestra horario escolar de la sección, calendario de evaluaciones programadas en los `evaluation_items`, progreso por Momento Pedagógico (1, 2 y 3), asistencia acumulada y medallas por desempeño o puntualidad.
 - **Simulador *"¿Cuánto necesito para aprobar?"*:** Carga en tiempo real los ítems ponderados del plan de evaluación (`evaluation_items` + `student_scores`) y calcula matemáticamente la calificación mínima necesaria en las evaluaciones pendientes para alcanzar `>= 10` pts (o literal equivalente).
-- **Carnet Digital Inteligente con QR:** Presenta foto optimizada `.webp`, nombre, cédula formateada (`V-12345678`), año, mención, sección y un código QR dinámico firmado criptográficamente con ventana temporal corta para lectura en Biblioteca, portón o actos escolares.
+- **Carnet Digital Inteligente con QR:** Presenta foto optimizada `.webp`, nombre, cédula formateada (`V-12345678`), año, mención, sección y un código QR dinámico firmado criptográficamente con ventana temporal corta (donde cada token **se re-emite** rotando su firma e invalidando el anterior, nunca se renueva) para lectura en Biblioteca, portón o actos escolares.
 - **Trámites y Solicitudes Express:** Formulario para solicitar constancia de estudio, constancia de inscripción, solvencia o revisión formal de calificación, con seguimiento de estado en tiempo real (`pending` → `in_review` → `approved` / `delivered`) y descarga directa del PDF oficial con QR.
 
 ### 3. ¿Cómo se puede construir?
@@ -66,20 +66,22 @@ Brindar un aula digital sincronizada automáticamente con la matrícula escolar 
 - **IA — Tutor Socrático 24/7 (RAG):** Chat contextual por asignatura que responde dudas exclusivamente a partir de las guías indexadas del docente en `pgvector`. Nunca entrega la respuesta final ni redacta ensayos completos; responde con pistas, ejemplos paralelos y preguntas paso a paso, mostrando citas de la guía consultada y recordando que la IA es orientativa y no sustituye la evaluación del docente.
 
 ### 3. ¿Cómo se puede construir?
-- **Rutas:** `src/app/(dashboard)/aula-virtual/page.tsx` y `src/app/(dashboard)/aula-virtual/[courseId]/page.tsx`.
+- **Especificación unificada completa:** Ver [04-AULA-VIRTUAL.md](./04-AULA-VIRTUAL.md).
+- **Rutas compartidas dentro de S.I.G.A.:** `src/app/(dashboard)/aula-virtual/page.tsx` (directorio único con todas las asignaturas de la sección inscrita, independientemente del año o mención) y `src/app/(dashboard)/aula-virtual/[courseId]/page.tsx` (sala de materia compartida con el docente). *No se construye como una aplicación externa ni subdominio independiente (`aula.*`).*
 - **Capa Lógica e IA:** `src/features/aula-virtual/`, `src/lib/ai/`, `src/app/api/ai/tutor/route.ts` (o Supabase Edge Function dedicada) usando **Vercel AI SDK (`streamText`)** + **Gemini 2.5 Flash**.
-- **Grounding y Seguridad RAG:**
-  1. Antes de consultar a Gemini, el backend valida que el `student_user_id` tenga `enrollment` activo en ese `virtual_course_id`.
-  2. Calcula el embedding de la pregunta y ejecuta una búsqueda vectorial en `rag_material_chunks` filtrada obligatoriamente por `virtual_course_id` (cero fuga entre asignaturas o menciones).
-  3. Inyecta solo los fragmentos reales recuperados (`citations_json`) bajo *system prompt* socrático estricto y minimización de PII (no se envía cédula ni teléfono al LLM).
-  4. Persiste la sesión en `ai_tutor_threads` y `ai_tutor_messages`. Si Gemini o la RPC fallan, muestra mensaje de error claro sin inventar respuestas.
+- **Exámenes y Grounding RAG:**
+  1. El alumno obtiene las preguntas mediante el RPC `public.siga_get_exam_questions_student(p_online_exam_id)` (sin exponer `correct_answer_json`) y envía respuestas vía `public.siga_submit_exam_attempt(p_online_exam_id, p_answers)`.
+  2. Antes de consultar a Gemini para el Tutor IA, el backend valida que el `student_user_id` tenga `enrollment` activo en ese `virtual_course_id`.
+  3. Calcula el embedding de la pregunta y ejecuta `public.siga_match_rag_chunks(p_virtual_course_id, ...)` sobre `rag_material_chunks` filtrada obligatoriamente por `virtual_course_id` (cero fuga entre asignaturas o menciones).
+  4. Inyecta solo los fragmentos reales recuperados (`citations_json`) bajo *system prompt* socrático estricto y minimización de PII (no se envía cédula ni teléfono al LLM).
+  5. Persiste la sesión en `ai_tutor_threads` y `ai_tutor_messages`. Si Gemini o la RPC fallan, muestra mensaje de error claro sin inventar respuestas.
 
 ---
 
 ## Módulo 1.3 · Entornos Prácticos Exclusivos por Mención Técnica (1.º a 6.º Año)
 
 ### 1. ¿Qué se quiere?
-Proporcionar herramientas interactivas reales alineadas con cada mención oficial de la E.T.C. "Andrés Bello" (*Telemática*, *Aduanas* y *Turismo*), de modo que la práctica técnica digital acompañe al estudiante desde 1.º hasta 6.º año y se mantenga extensible sin crear nuevas tablas en la BD.
+Proporcionar herramientas interactivas reales integradas **dentro del mismo Aula Virtual (`/aula-virtual`)** y alineadas con cada mención oficial de la E.T.C. "Andrés Bello" (*Telemática*, *Aduanas* y *Turismo*), de modo que la práctica técnica digital complemente las materias desde 1.º hasta 6.º año sin fragmentar el LMS principal ni crear nuevas tablas en la BD.
 
 ### 2. ¿Qué se va a hacer?
 El sistema filtra automáticamente el entorno correspondiente a la `mencion_id` de la matrícula del alumno:

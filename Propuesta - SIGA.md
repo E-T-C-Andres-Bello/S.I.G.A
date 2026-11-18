@@ -26,14 +26,15 @@ Módulos diseñados exclusivamente para la experiencia académica, práctica té
 * **Carnet Digital Inteligente con QR:** Identificación estudiantil digital en el teléfono con código QR dinámico y criptográfico para validar identidad en portón, biblioteca y actos académicos.
 * **Trámites y Solicitudes Express:** Gestión en línea de solicitudes de constancias de estudio, solvencias administrativas y revisiones formales de calificaciones con seguimiento de estatus.
 
-### 1.2 Aula Virtual (LMS) y Tutor Socrático IA
-* **Matriculación Automática:** Al completarse la inscripción oficial en el sistema, el estudiante queda inscrito automáticamente en las aulas virtuales de todas sus asignaturas según año, mención y sección.
+### 1.2 Aula Virtual Unificada (`/aula-virtual`) y Tutor Socrático IA
+* **Campus Único Integrado dentro de S.I.G.A.:** Todos los estudiantes (1.º a 6.º año) y sus respectivos docentes confluyen en una misma plataforma (`/aula-virtual` y `/aula-virtual/[courseId]`), manteniendo una única sesión `@etcandresbello.org` sin portales externos separados.
+* **Matriculación Automática:** Al completarse la inscripción oficial en el sistema, el estudiante queda inscrito automáticamente en los cursos virtuales de todas sus asignaturas según año, mención y sección.
 * **Repositorio de Contenidos Modulares:** Acceso directo a guías de estudio en PDF, presentaciones, recursos multimedia y ejemplos de código publicados por sus docentes.
 * **Buzón de Entregas y Evaluaciones Online:** Carga digital de tareas con control de fecha límite, realización de evaluaciones objetivas en línea y consulta inmediata de retroalimentación y calificaciones.
 * **IA — Tutor Socrático 24/7 (RAG):** Asistente de estudio entrenado con las guías oficiales cargadas por cada profesor de la E.T.C. "Andrés Bello". No entrega respuestas directas ni resuelve tareas por el alumno; formula preguntas guía paso a paso para fortalecer la comprensión. *(Las orientaciones generadas por IA son de apoyo académico y nunca sustituyen la evaluación oficial del docente).*
 
-### 1.3 Entornos Prácticos Exclusivos por Mención Técnica (1.º a 6.º Año)
-Herramientas interactivas adaptadas al perfil profesional de cada mención de la escuela:
+### 1.3 Laboratorios Prácticos por Mención Técnica (Integrados en `/aula-virtual`)
+Herramientas interactivas complementarias dentro del Aula Virtual, adaptadas al perfil profesional de cada mención de la escuela:
 
 * **Telemática:**
   * *Sandbox de Práctica de Código y SQL:* Entorno interactivo de consultas y laboratorio SQL aislado sobre **Neon Serverless** con bases de datos sintéticas de práctica (sin acceso ni exposición a datos reales de producción).
@@ -72,8 +73,8 @@ Módulos dedicados exclusivamente a la labor pedagógica, control de aula, evalu
 * **Diario de Clases e Incidencias:** Registro digital del contenido impartido por bloque de hora y reporte formal de novedades de aula hacia Coordinación u Orientación.
 * **Aviso de Inasistencia Docente:** Notificación previa desde el panel docente en caso de ausencia justificada para activar oportunamente la reorganización de bloques horarios en Coordinación.
 
-### 2.2 Aula Virtual (LMS), Evaluaciones y Carga Directa de Notas
-* **Gestión de Contenidos y Buzón de Tareas:** Publicación modular de guías, materiales multimedia y asignaciones con fechas de cierre y marcación automática de entregas tardías.
+### 2.2 Aula Virtual Unificada (`/aula-virtual`), Evaluaciones y Carga Directa de Notas
+* **Gestión de Cursos por Sección y Materia:** Dentro del mismo espacio `/aula-virtual`, el profesor administra exclusivamente sus materias y secciones asignadas con publicación modular de guías, materiales multimedia y asignaciones con fechas de cierre y marcación automática de entregas tardías.
 * **Motor de Evaluaciones con Sincronización a Planilla:** Creación de pruebas objetivas (selección simple/múltiple y verdadero/falso) con calificación instantánea y transferencia directa al libro de notas oficial del lapso, eliminando la doble transcripción manual.
 * **Entornos Prácticos por Mención:** Publicación de ejercicios, rúbricas y casos prácticos para las secciones asignadas de Telemática, Aduanas y Turismo.
 * **IA — Asistente Pedagógico Docente:**

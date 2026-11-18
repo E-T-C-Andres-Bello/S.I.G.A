@@ -35,6 +35,7 @@ Adaptación directa de los estándares de ingeniería y seguridad de **VitaLink 
 5. **Sin datos ni IA simulada:** Prohibido fabricar calificaciones, promedios, alertas de deserción o respuestas del Tutor IA con regex o valores de relleno. Si Gemini/Groq/RPC falla, mostrar estado vacío, `—`, o error claro y honesto.
 6. **Superficie mínima de privilegios en PostgreSQL:** Los RPCs internos llevan `REVOKE EXECUTE ... FROM PUBLIC, anon;` y `GRANT EXECUTE ... TO authenticated, service_role;`. Solo las funciones explícitas `siga_public_*` (ej. verificación QR de documentos) pueden otorgarse a `anon` con anti-abuso.
 7. **Errores genéricos al usuario:** El detalle técnico (`SQLERRM`, stack traces) se registra en logs internos/Sentry; al navegador se devuelve un mensaje seguro sin filtrar estructura interna de tablas.
+   - Asimismo, **prohibido** mencionar en errores, estados vacíos o descripciones de interfaz nombres de tablas (`section_schedules`), migraciones (`00002_*.sql`), RPCs, proveedores (`Supabase`) o rutas crudas (`<code>/verificar</code>`). Redactar siempre en español claro orientado al estudiante, docente o personal escolar.
 8. **Bitácora inmutable y ofuscación de PII en logs:**
    - Toda modificación de calificaciones, cierres de momento y cambios críticos escribe en `audit_logs` (autor, valor anterior, valor nuevo, timestamp, IP/contexto).
    - `audit_logs` debe protegerse con trigger anti-tamper (`BEFORE UPDATE OR DELETE`) para garantizar inmutabilidad ante auditorías MPPE.
@@ -108,6 +109,7 @@ GRANT EXECUTE ON FUNCTION public.siga_registrar_nota(UUID, UUID, SMALLINT, NUMER
 3. Validar todos los formularios (inscripciones, notas 1–20, literales `A`–`E`, pasantías, biblioteca) con **Zod** tanto en el cliente (`React Hook Form`) como en el servidor.
 4. Nunca usar `dangerouslySetInnerHTML` con texto generado por usuarios o respuestas crudas del LLM.
 5. **Protección anti-doble envío:** Todo formulario crítico (inscripción, carga de notas, préstamos de biblioteca) debe usar bloqueo sincrónico con `useRef` + botón `disabled` + clave de idempotencia cuando venga de cola *offline*.
+6. **Copy de interfaz libre de jerga técnica:** Nunca usar `<code>` ni texto técnico para mostrar rutas (`/verificar`), tablas (`section_schedules`), archivos o mecanismos internos (`HMAC`, `RLS`, `Supabase`) en pantallas de producción. Si se referencia otra sección del portal, usar lenguaje natural o un enlace/botón descriptivo (*"portal público de verificación"*).
 
 ### 3.5 Capa de Inteligencia Artificial (Gemini 2.5 Flash, RAG `pgvector`)
 
@@ -169,6 +171,7 @@ Verificar SIEMPRE estos puntos antes de dar por cerrada una feature:
 - [ ] Rutas públicas (`siga_public_*` / `/verificar`) con rate limit y sin fuga de PII.
 - [ ] Formularios y Route Handlers validados con Zod; `select(...)` explícito (cero `select('*')`).
 - [ ] Cero secretos en código o variables `NEXT_PUBLIC_*`; cero PII sensible en `audit_logs` o logs.
+- [ ] Cero identificadores técnicos (tablas SQL, rutas crudas con `/...`, archivos `.sql`, `<code>` de rutas, `Supabase`/`HMAC`/`RPC`) en textos, avisos, estados vacíos o mensajes de error de la UI.
 - [ ] Cero datos o respuestas de IA simuladas; citas/grounding real en RAG.
 - [ ] Mutaciones *offline-first* idempotentes y con bloqueo anti-doble submit (`useRef`).
 - [ ] Verificación técnica aprobada: `typecheck`, `lint`, `build`, tests y auditoría de dependencias/secretos.

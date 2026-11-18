@@ -47,7 +47,7 @@ Permitir a cada Coordinador de Mención supervisar de 1.º a 6.º año el rendim
 - **Atención de Incidencias y Reorganización ante Inasistencia Docente:** Recepción inmediata de alertas cuando un profesor registra un aviso en `teacher_absences` o reporta una incidencia académica en `class_diary_entries`, coordinando actividades o suplencias temporales en sus secciones.
 
 ### 3. ¿Cómo se puede construir?
-- **Rutas:** `src/app/(dashboard)/docente/` y paneles filtrados en `src/app/(dashboard)/analitica/mencion/`.
+- **Rutas:** `src/app/(dashboard)/docente/`, supervisión académica en `src/app/(dashboard)/aula-virtual/` (ver [04-AULA-VIRTUAL.md](./04-AULA-VIRTUAL.md)) y paneles filtrados en `src/app/(dashboard)/analitica/mencion/`.
 - **RLS Acotado por `user_roles.mencion_id`:** Función SQL `siga_user_coord_mencion_id()` verifica que el usuario tenga rol `coordinador_mencion` activo y restringe sus consultas exclusivamente a `sections.mencion_id = user_roles.mencion_id`.
 
 ---

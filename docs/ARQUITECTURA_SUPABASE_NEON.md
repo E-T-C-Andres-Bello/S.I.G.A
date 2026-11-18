@@ -122,12 +122,12 @@ Las consultas estadísticas agregadas consumen mucha CPU/IOPS y crecen cada año
 
 ### 4.3 Flujo 3: Laboratorios de Telemática (*Zero-Risk SQL Sandboxes*)
 
-Los estudiantes de **Telemática** (1.º a 6.º año) necesitan practicar PostgreSQL real (`CREATE TABLE`, `JOIN`, `GROUP BY`, `INDEX`, `RLS`) dentro del Aula Virtual, pero nunca contra bases de producción ni en servidores locales frágiles:
+Dentro del **Aula Virtual unificada (`/aula-virtual`)**, los estudiantes de **Telemática** (1.º a 6.º año) acceden a su laboratorio práctico para practicar PostgreSQL real (`CREATE TABLE`, `JOIN`, `GROUP BY`, `INDEX`, `RLS`) sin tocar nunca las bases de producción ni depender de servidores locales frágiles:
 
 1. **Aislamiento total de proyecto:**  
    La Edge Function `neon-telematica-sandbox` apunta únicamente a `NEON_LABS_PROJECT_ID` (`siga-telematica-labs`), cuya rama plantilla `lab-template` contiene tablas ficticias de enseñanza.
 2. **Creación instantánea de *branches* por estudiante o práctica:**  
-   Al abrir una guía práctica en `src/app/(dashboard)/aula-virtual/telematica/`, Next.js solicita a la Edge Function la apertura de un entorno SQL. La función verifica que el usuario sea alumno o docente de Telemática, consulta si ya posee un *branch* activo para esa actividad y, si no existe, lo crea en menos de 1 segundo vía API REST de Neon.
+   Al abrir una guía práctica desde el laboratorio integrado en `src/app/(dashboard)/aula-virtual/telematica/`, Next.js solicita a la Edge Function la apertura de un entorno SQL. La función verifica que el usuario sea alumno o docente de Telemática, consulta si ya posee un *branch* activo para esa actividad y, si no existe, lo crea en menos de 1 segundo vía API REST de Neon.
 3. **Ejecución controlada y límites pedagógicos:**  
    Las consultas de práctica viajan por la Edge Function hacia ese *branch* efímero con límites estrictos de tiempo de ejecución (*statement timeout*), tamaño máximo de respuesta y bloqueo de operaciones de administración de cuenta. Si un estudiante borra una tabla por accidente (`DROP TABLE`), puede reiniciar su *branch* en 1 clic sin afectar a ningún compañero.
 4. **Limpieza automática (TTL):**  

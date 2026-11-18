@@ -191,22 +191,26 @@ Permite crecer en funciones futuras insertando permisos sin tocar tablas ni rees
 
 ---
 
-## 7. Dominio 5 — Aula Virtual LMS, Tutor Socrático RAG (`pgvector`) y Menciones Técnicas
+## 7. Dominio 5 — Aula Virtual LMS Unificada (`/aula-virtual`), Tutor Socrático RAG (`pgvector`) y Menciones Técnicas
 
-### 7.1 Aula Virtual (LMS) y Tutor IA
-- **`virtual_courses`**: `id (UUID PK)`, `teacher_assignment_id (UUID UNIQUE FK)`, `welcome_message`, `ai_tutor_enabled (BOOLEAN DEFAULT true)`, `is_published (BOOLEAN)`.
+### 7.1 Aula Virtual Única (LMS) y Tutor IA
+El LMS opera como un único campus integrado dentro de S.I.G.A. donde confluyen docentes y estudiantes mediante la cadena relacional `teacher_assignments` (1:1 `virtual_courses`) ↔ `sections` / `school_years` ↔ `enrollments`, filtrada por **RLS** (`pol_virtual_courses_select` y `siga_internal.teaches_assignment`):
+
+- **`virtual_courses`**: `id (UUID PK)`, `teacher_assignment_id (UUID UNIQUE FK)`, `welcome_message`, `ai_tutor_enabled (BOOLEAN DEFAULT true)`, `is_published (BOOLEAN)`. *(Lectura para docentes de la asignación, coordinadores de la mención, Control/Dirección y alumnos `verified_workspace` matriculados en la misma `section_id` y `school_year_id` cuando `is_published = true`).*
 - **`course_modules`**: `id (UUID PK)`, `virtual_course_id (FK)`, `title`, `sort_order (INT)`, `is_visible (BOOLEAN)`.
 - **`course_materials`**: `id (UUID PK)`, `course_module_id (FK)`, `title`, `material_type` (`pdf`, `slides`, `video_link`, `code_snippet`, `guide`), `storage_path_or_url`, `rag_status` (`pending`, `indexed`, `failed`, `not_applicable`), `created_at`.
-- **`rag_material_chunks`**: `id (UUID PK)`, `course_material_id (FK)`, `virtual_course_id (FK)` *(desnormalizado para filtrado rápido RLS/RAG por curso/mención)*, `chunk_index (INT)`, `content (TEXT)`, `embedding (VECTOR(768))` *(índice `HNSW` para similitud coseno)*, `token_count (INT)`.
+- **`rag_material_chunks`**: `id (UUID PK)`, `course_material_id (FK)`, `virtual_course_id (FK)` *(desnormalizado para filtrado rápido RLS/RAG por curso/mención)*, `chunk_index (INT)`, `content (TEXT)`, `embedding (VECTOR(768))` *(índice `HNSW` para similitud coseno; consultado mediante `public.siga_match_rag_chunks`)*.
 - **`assignments`**: `id (UUID PK)`, `course_module_id (FK)`, `title`, `instructions`, `due_at (TIMESTAMPTZ)`, `allow_late (BOOLEAN DEFAULT true)`, `rubric_json (JSONB)`.
 - **`assignment_submissions`**: `id (UUID PK)`, `assignment_id (FK)`, `enrollment_id (FK)`, `file_path`, `text_answer`, `submitted_at`, `is_late (BOOLEAN)`, `ai_pre_evaluation (JSONB)` *(sugerencia según rúbrica + índice de similitud/duplicado)*, `teacher_feedback (TEXT)`, `UNIQUE (assignment_id, enrollment_id)`.
 - **`online_exams`**: `id (UUID PK)`, `virtual_course_id (FK)`, `title`, `opens_at`, `closes_at`, `duration_minutes`, `max_attempts (SMALLINT DEFAULT 1)`, `sync_to_evaluation_item_id (UUID NULLABLE FK)`.
-- **`exam_questions`**: `id (UUID PK)`, `online_exam_id (FK)`, `question_type` (`single_choice`, `multiple_choice`, `true_false`), `prompt`, `options_json (JSONB)`, `correct_answer_json (JSONB)` *(protegido por RLS: nunca expuesto al cliente del alumno durante el examen)*, `points (NUMERIC(5,2))`, `generated_by_ai (BOOLEAN)`.
-- **`exam_attempts`**: `id (UUID PK)`, `online_exam_id (FK)`, `enrollment_id (FK)`, `started_at`, `submitted_at`, `answers_json (JSONB)`, `computed_score (NUMERIC(5,2))`, `attempt_number (SMALLINT)`.
+- **`exam_questions`**: `id (UUID PK)`, `online_exam_id (FK)`, `question_type` (`single_choice`, `multiple_choice`, `true_false`), `prompt`, `options_json (JSONB)`, `correct_answer_json (JSONB)` *(protegido por RLS: nunca expuesto directamente al estudiante; se sirve sin respuestas mediante `public.siga_get_exam_questions_student(p_online_exam_id)`)*.
+- **`exam_attempts`**: `id (UUID PK)`, `online_exam_id (FK)`, `enrollment_id (FK)`, `started_at`, `submitted_at`, `answers_json (JSONB)`, `computed_score (NUMERIC(5,2))`, `attempt_number (SMALLINT)`. *(Evaluado y calificado en servidor mediante `public.siga_submit_exam_attempt(p_online_exam_id, p_answers)`, sincronizando automáticamente a `student_scores` si existe `sync_to_evaluation_item_id`)*.
 - **`ai_tutor_threads`** y **`ai_tutor_messages`**: Historial de conversaciones socráticas por `student_user_id` + `virtual_course_id`, guardando `citations_json` (chunks reales del profesor utilizados como respaldo).
 
+> **Nota de implementación en consultas SSR/RLS (`00001_initial_baseline.sql`):** En las tablas hijas `course_modules`, `course_materials`, `assignments` y `online_exams`, las consultas desde Next.js deben resolver y filtrar siempre por el `virtual_course_id` autorizado vía `virtual_courses`, y se recomienda añadir verificación explícita por matrícula/sección en una nueva migración de BD antes de pasar a producción.
+
 ### 7.2 Entornos Prácticos Extensibles por Mención Técnica (1.º a 6.º Año)
-Diseñados de forma **unificada y extensible** para no crear nuevas tablas cuando se añadan nuevos simuladores:
+Integrados dentro del mismo `/aula-virtual` (`/aula-virtual/{telematica,aduanas,turismo}`) de forma **unificada y extensible** para no crear nuevas tablas cuando se añadan nuevos simuladores:
 
 - **`mention_lab_scenarios`**:
   - `id (UUID PK)`, `mencion_id (FK)`, `grade_year (SMALLINT CHECK 1..6)`, `tool_type` (`telematica_sql`, `telematica_network`, `telematica_support_log`, `aduanas_tariff`, `aduanas_cif_fob`, `aduanas_documentary`, `turismo_routes`, `turismo_events`, `turismo_reception`), `title`, `instructions`, `is_base_catalog (BOOLEAN)`, `created_by (FK -> users.id)`, `config_json (JSONB NOT NULL)` *(aranceles modelo, topología IP, rutas de Guayana, campos B/L o esquema sintético de laboratorio en Neon)*, `evaluation_item_id (UUID NULLABLE FK)`.
