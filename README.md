@@ -4,7 +4,7 @@
 *Puerto Ordaz, Estado Bolívar, Venezuela — Código DEA: OD01340701*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Status: Architecture & Provisioning](https://img.shields.io/badge/Estado-Arquitectura%20y%20Planificaci%C3%B3n-orange.svg)](#estado-actual-del-proyecto)
+[![Status: Active Development (Pre-Alpha)](https://img.shields.io/badge/Estado-En%20Desarrollo%20Activo%20(Pre--Alpha)-blue.svg)](#estado-actual-del-proyecto)
 [![Community Service: UNEG](https://img.shields.io/badge/Servicio%20Comunitario-UNEG%20Ingenier%C3%ADa%20Inform%C3%A1tica-green.svg)](#equipo-de-desarrollo)
 
 Plataforma web y PWA *offline-first* de código abierto para la gestión integral, automatización y optimización de los flujos académicos, administrativos, estudiantiles, de orientación, pasantías y biblioteca de la **E.T.C. "Andrés Bello"** (~1.300 estudiantes, 1.º a 6.º año en menciones técnicas de **Telemática**, **Aduanas** y **Turismo**), alineada con los estándares y formatos oficiales del **MPPE** y **CDCE**.
@@ -13,8 +13,19 @@ Plataforma web y PWA *offline-first* de código abierto para la gestión integra
 
 ## Estado Actual del Proyecto
 
-> **Fase Actual: Arquitectura, Diseño e Infraestructura Previa al Desarrollo**  
-> Este repositorio se encuentra en su etapa inicial de planificación técnica y provisión de infraestructura educativa/open-source antes de iniciar el ciclo activo de codificación.
+> **Fase Actual: En Construcción — Desarrollo Activo e Implementación Modular (`Pre-Alpha`)**  
+> La etapa de arquitectura inicial y provisión de base de datos ha concluido. El repositorio se encuentra actualmente en **fase de construcción iterativa** por parte del equipo de desarrollo, con el núcleo de autenticación, seguridad y el primer módulo operativo ya implementados.
+
+### Avance de Implementación (Hitos Completados vs. En Curso)
+
+| Capa / Módulo | Estado | Detalle técnico implementado |
+| :--- | :--- | :--- |
+| **Base de Datos y Seguridad (Supabase)** | Completado (Baseline) | Esquema relacional DDL (`00001_initial_baseline.sql`), catálogos base, políticas **RLS** multi-rol, RPCs `SECURITY DEFINER` y tipado sincronizado (`database.types.ts`). |
+| **Landing Institucional y Autenticación** | Completado | Portada propia (`/`), acceso con Google Workspace (`@etcandresbello.org`) y credenciales con verificación estricta *fail-closed* contra matrícula y roles. |
+| **Shell Privado y Sistema Visual** | Completado | Contenedor compartido `(dashboard)` con *Curved Glass Sidebar*, personalizador Glassmorphism en vivo, tema claro/oscuro, pantallas globales de carga y error. |
+| **Módulo de Estudiantes (`/estudiante`)** | En Construcción (Base Operativa) | Dashboard principal con indicadores reales bajo RLS, agenda semanal interactiva y bloque `SigaAnalyticsBento` (curva MPPE, ondas, treemap curricular y radar). |
+| **Docente, Control de Estudios y Dirección** | En Desarrollo Paralelo | Rutas base y plantillas por rol (`/docente`, `/control-estudios`, `/analitica`, `/orientacion`, `/pasantias`, `/biblioteca`, `/representante`) listas para implementación funcional del equipo. |
+| **IA, PDFs Client-Side y PWA Offline** | Planificado | Integración pendiente de Gemini 2.5 Flash, generación PDF (`@react-pdf/renderer`) y cola de sincronización offline (`@serwist/next` + `IndexedDB`). |
 
 El sistema está siendo diseñado por estudiantes de **Ingeniería Informática de la Universidad Nacional Experimental de Guayana (UNEG)** como proyecto de Servicio Comunitario, con el doble objetivo de digitalizar los procesos administrativos del plantel a costo cero y servir como arquitectura de referencia viva para cientos de estudiantes de bachillerato técnico de la mención **Telemática**.
 
@@ -214,7 +225,7 @@ Para inicializar el entorno productivo y alimentar los motores de reglas, genera
 
 ## Landing Page Propio y Estructura del Repositorio
 
-SIGA contará con un **Landing Page propio** (`src/app/(landing)/`) diseñado específicamente para presentar la plataforma ante la comunidad educativa de la **E.T.C. "Andrés Bello"**, integrando identidad institucional, acceso por roles, verificador público QR, módulos por mención y patrocinadores tecnológicos.
+SIGA cuenta con un **Landing Page propio** (`src/app/(landing)/`) diseñado específicamente para presentar la plataforma ante la comunidad educativa de la **E.T.C. "Andrés Bello"**, integrando identidad institucional, acceso por roles, verificador público QR, módulos por mención y patrocinadores tecnológicos.
 
 - **Contexto institucional migrado:** [`docs/CONTEXTO_INSTITUCIONAL.md`](docs/CONTEXTO_INSTITUCIONAL.md)
 - **Estructura de carpetas y rutas del stack:** [`docs/ESTRUCTURA_PROYECTO.md`](docs/ESTRUCTURA_PROYECTO.md)
