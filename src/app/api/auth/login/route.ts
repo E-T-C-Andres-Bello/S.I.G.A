@@ -1,5 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
+  enforceRateLimit,
+  resolveRequestClientIp,
+} from "@/lib/security/rate-limit";
+import {
   resolveAuthEmailForCedula,
   verifyPreEnrolledAccess,
 } from "@/lib/supabase/auth-verification";
@@ -16,9 +20,10 @@ const GENERIC_CREDENTIALS_ERROR =
 function errorJson(
   message: string,
   status: number,
-  code?: AuthErrorCode | "invalid_input" | "invalid_credentials"
+  code?: AuthErrorCode | "invalid_input" | "invalid_credentials" | "rate_limited",
+  headers?: HeadersInit
 ): NextResponse {
-  return NextResponse.json({ ok: false, code, message }, { status });
+  return NextResponse.json({ ok: false, code, message }, { status, headers });
 }
 
 /**
@@ -26,6 +31,23 @@ function errorJson(
  * y contraseña. No existe auto-registro; exige ficha pre-inscrita y rol activo.
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const clientIp = resolveRequestClientIp(request);
+  const rate = await enforceRateLimit({
+    namespace: "auth_login",
+    clientKey: clientIp,
+    limit: 10,
+    windowMs: 60_000,
+  });
+
+  if (!rate.allowed) {
+    return errorJson(
+      "Demasiados intentos de inicio de sesión. Espera un minuto antes de volver a intentar.",
+      429,
+      "rate_limited",
+      { "Retry-After": String(rate.retryAfterSec) }
+    );
+  }
+
   let rawBody: unknown;
   try {
     rawBody = await request.json();

@@ -172,6 +172,56 @@ export async function verifyPreEnrolledAccess(params: {
 
   let matchedUser = byAuthUser;
 
+  // Elevación automática si el alumno provisional vincula su Google Workspace (@etcandresbello.org)
+  if (
+    matchedUser &&
+    matchedUser.access_tier === "provisional_cedula" &&
+    params.loginMethod === "google_oauth" &&
+    isInstitutionalEmail(normalizedEmail)
+  ) {
+    if (!adminClient) {
+      return { ok: false, errorCode: "supabase_not_configured" };
+    }
+
+    if (
+      matchedUser.institutional_email &&
+      matchedUser.institutional_email.toLowerCase() !== normalizedEmail
+    ) {
+      return { ok: false, errorCode: "domain_not_allowed" };
+    }
+
+    const { data: emailOwner } = await adminClient
+      .from("users")
+      .select("id")
+      .eq("institutional_email", normalizedEmail)
+      .neq("id", matchedUser.id)
+      .is("deleted_at", null)
+      .maybeSingle<{ id: string }>();
+
+    if (emailOwner) {
+      return { ok: false, errorCode: "domain_not_allowed" };
+    }
+
+    const nowIso = new Date().toISOString();
+    const { data: upgradedUser, error: upgradeError } = await adminClient
+      .from("users")
+      .update({
+        institutional_email: normalizedEmail,
+        access_tier: "verified_workspace",
+        workspace_verified_at: nowIso,
+      })
+      .eq("id", matchedUser.id)
+      .eq("access_tier", "provisional_cedula")
+      .select("id, auth_user_id, institutional_email, access_tier, is_active, deleted_at")
+      .maybeSingle<InternalUserRow>();
+
+    if (upgradeError || !upgradedUser) {
+      return { ok: false, errorCode: "oauth_failed" };
+    }
+
+    matchedUser = upgradedUser;
+  }
+
   // Primer ingreso Workspace de un alumno o docente ya pre-inscrito por email institucional
   if (!matchedUser && isInstitutionalEmail(normalizedEmail) && adminClient) {
     const { data: byInstitutionalEmail, error: emailLookupError } = await adminClient
@@ -190,8 +240,12 @@ export async function verifyPreEnrolledAccess(params: {
       };
     }
 
-    if (byInstitutionalEmail) {
-      await adminClient
+    if (
+      byInstitutionalEmail &&
+      (byInstitutionalEmail.auth_user_id === null ||
+        byInstitutionalEmail.access_tier === "provisional_cedula")
+    ) {
+      const { data: boundUser, error: bindError } = await adminClient
         .from("users")
         .update({
           auth_user_id: params.authUserId,
@@ -199,13 +253,12 @@ export async function verifyPreEnrolledAccess(params: {
           workspace_verified_at: new Date().toISOString(),
         })
         .eq("id", byInstitutionalEmail.id)
-        .is("auth_user_id", null);
+        .select("id, auth_user_id, institutional_email, access_tier, is_active, deleted_at")
+        .maybeSingle<InternalUserRow>();
 
-      matchedUser = {
-        ...byInstitutionalEmail,
-        auth_user_id: params.authUserId,
-        access_tier: "verified_workspace",
-      };
+      if (!bindError && boundUser) {
+        matchedUser = boundUser;
+      }
     }
   }
 

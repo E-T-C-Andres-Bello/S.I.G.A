@@ -5,6 +5,7 @@ const CEDULA_REGEX = /\b([VEJ])-?(\d{2,5})(\d{4})\b/gi;
 const EMAIL_REGEX = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi;
 const PHONE_REGEX = /\b(?:\+?58|0)(?:4\d{2}|2\d{2})[-.\s]?\d{3}[-.\s]?\d{4}\b/g;
 const JWT_REGEX = /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g;
+const SIGA_QR_REGEX = /\bSIGAQR1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g;
 
 const SENSITIVE_HEADER_KEYS = new Set([
   "authorization",
@@ -23,11 +24,12 @@ const SENSITIVE_ROUTE_PREFIXES = [
 ];
 
 /**
- * Redacta cédulas venezolanas, correos, teléfonos y tokens JWT de cadenas de telemetría
+ * Redacta cédulas venezolanas, correos, teléfonos y tokens JWT/QR de cadenas de telemetría
  * para cumplir con la política de privacidad K12 de S.I.G.A.
  */
 export function redactSigaPii(value: string): string {
   return value
+    .replace(SIGA_QR_REGEX, "[REDACTED_SIGAQR]")
     .replace(JWT_REGEX, "[REDACTED_JWT]")
     .replace(EMAIL_REGEX, "[REDACTED_EMAIL]")
     .replace(PHONE_REGEX, "[REDACTED_PHONE]")

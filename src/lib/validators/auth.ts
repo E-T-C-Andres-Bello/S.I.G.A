@@ -26,7 +26,7 @@ export const AUTH_ERROR_MESSAGES: Record<AuthErrorCode, string> = {
   oauth_failed:
     "No se pudo completar la verificación con Google Workspace. Intenta nuevamente.",
   supabase_not_configured:
-    "La autenticación escolar aún no tiene variables de entorno Supabase configuradas en este entorno.",
+    "El servicio de acceso escolar no está disponible temporalmente en este entorno.",
   schema_not_ready:
     "Acceso bloqueado por seguridad: la verificación de matrícula en base de datos aún no está inicializada.",
 };

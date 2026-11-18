@@ -67,3 +67,49 @@ export async function startGoogleWorkspaceOAuth(
     return { ok: false, message: AUTH_ERROR_MESSAGES.oauth_failed };
   }
 }
+
+/**
+ * Vincula una identidad Google Workspace (`@etcandresbello.org`) sobre una sesión
+ * provisional activa por cédula para elevar el acceso a `verified_workspace`.
+ */
+export async function linkGoogleWorkspaceIdentity(
+  callbackReturnPath = "/estudiante"
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const supabase = getBrowserSupabaseClient();
+  if (!supabase) {
+    return {
+      ok: false,
+      message: AUTH_ERROR_MESSAGES.supabase_not_configured,
+    };
+  }
+
+  try {
+    const callbackUrl = new URL("/api/auth/callback", window.location.origin);
+    callbackUrl.searchParams.set("return_to", callbackReturnPath);
+    callbackUrl.searchParams.set("next", callbackReturnPath);
+    callbackUrl.searchParams.set("link_mode", "workspace");
+
+    const { error } = await supabase.auth.linkIdentity({
+      provider: "google",
+      options: {
+        redirectTo: callbackUrl.toString(),
+        queryParams: {
+          hd: INSTITUTIONAL_EMAIL_DOMAIN,
+          prompt: "select_account",
+        },
+      },
+    });
+
+    if (error) {
+      return {
+        ok: false,
+        message:
+          "No se pudo iniciar la vinculación directa desde esta sesión. Si ya tienes tu cuenta @etcandresbello.org asignada por Control de Estudios, cierra sesión e ingresa con Google.",
+      };
+    }
+
+    return { ok: true };
+  } catch {
+    return { ok: false, message: AUTH_ERROR_MESSAGES.oauth_failed };
+  }
+}

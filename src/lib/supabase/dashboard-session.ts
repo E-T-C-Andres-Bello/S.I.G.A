@@ -12,6 +12,8 @@ export interface DashboardUserProfile {
   lastName: string;
   cedula: string;
   institutionalEmail: string | null;
+  recoveryEmail: string | null;
+  phone: string | null;
   accessTier: "provisional_cedula" | "verified_workspace" | "suspended";
   avatarWebpUrl: string | null;
   primaryRole: InstitutionalRoleCode;
@@ -23,6 +25,8 @@ interface UserProfileQueryRow {
   last_name: string;
   cedula: string;
   institutional_email: string | null;
+  recovery_email: string | null;
+  phone: string | null;
   access_tier: "provisional_cedula" | "verified_workspace" | "suspended";
   avatar_webp_url: string | null;
 }
@@ -64,7 +68,7 @@ export const getAuthenticatedDashboardContext = cache(
       supabase
         .from("users")
         .select(
-          "first_name, last_name, cedula, institutional_email, access_tier, avatar_webp_url"
+          "first_name, last_name, cedula, institutional_email, recovery_email, phone, access_tier, avatar_webp_url"
         )
         .eq("id", verification.internalUserId)
         .maybeSingle<UserProfileQueryRow>(),
@@ -86,6 +90,8 @@ export const getAuthenticatedDashboardContext = cache(
       lastName: profile.last_name,
       cedula: profile.cedula,
       institutionalEmail: profile.institutional_email,
+      recoveryEmail: profile.recovery_email,
+      phone: profile.phone,
       accessTier: profile.access_tier,
       avatarWebpUrl: profile.avatar_webp_url,
       primaryRole: verification.primaryRole,
