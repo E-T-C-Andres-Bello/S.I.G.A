@@ -43,7 +43,7 @@ Las instrucciones de las skills aplicables son obligatorias durante toda la ejec
 
 - **Stack:** Next.js 15 (App Router), React 19, TypeScript (`strict: true`), Tailwind CSS v4 (`src/app/globals.css`), `shadcn` (`style: "new-york"` en `components.json`), `lucide-react` e integración con Supabase / PostgreSQL / PWA Offline-First.
 - **Componentes UI (`shadcn`):** Todo componente UI reutilizable se ubica en **`src/components/ui/`** (alias `@/components/ui/*` configurado en `tsconfig.json` y `components.json`).
-- **Contexto institucional y estructura:** Consultar `docs/CONTEXTO_INSTITUCIONAL.md` y `docs/ESTRUCTURA_PROYECTO.md` ante dudas de negocio o rutas.
+- **Contexto institucional y estructura:** Consultar `docs/CONTEXTO_INSTITUCIONAL.md`, `docs/ESTRUCTURA_PROYECTO.md` y `docs/ARQUITECTURA_SUPABASE_NEON.md` ante dudas de negocio, rutas o arquitectura Supabase + Neon.
 - **Entorno de desarrollo aislado (`Windows`):** En `next.config.ts`, `next dev` usa `.next-dev` y `next build` usa `.next` para evitar errores `Internal Server Error` por colisión de *chunks* mientras el servidor de desarrollo está activo.
 - **Comandos de verificación obligatorios tras editar código:**
   - `npm run typecheck` (`tsc --noEmit`)
@@ -54,7 +54,7 @@ Las instrucciones de las skills aplicables son obligatorias durante toda la ejec
 
 ## 3. Reglas Innegociables de Seguridad e Integridad
 
-1. **Cero secretos en el frontend:** Todo prefijo `NEXT_PUBLIC_` es público. Llaves de Supabase `service_role`, IA, correo o bots viven exclusivamente en servidor.
+1. **Solo variables de Supabase en Next.js y cero secretos en el frontend:** Todo prefijo `NEXT_PUBLIC_` es público. En el entorno web de Next.js únicamente deben residir variables de Supabase; llaves de Neon (`NEON_*`), IA, correo o bots viven aisladas en **Supabase Edge Functions (`supabase secrets`)** o servidor protegido (`service_role`).
 2. **Cero datos reales de estudiantes o PII en Git:** Usar únicamente datos sintéticos en seeds o pruebas.
 3. **Sin datos simulados en producción/lógica académica:** Nunca fabricar calificaciones, promedios ni respuestas del Tutor IA; si un servicio falla, mostrar estado vacío o error claro.
 4. **Resguardo institucional:** La apertura de código no autoriza el uso comercial ni suplantación del escudo o sellos oficiales de la E.T.C. "Andrés Bello", y el uso de marcas de aliados tecnológicos en `/legal` y portada respeta sus *Brand Guidelines* oficiales.

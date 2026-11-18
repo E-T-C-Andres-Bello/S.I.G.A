@@ -21,6 +21,7 @@ export interface FooterLink {
   label: string;
   href?: string;
   external?: boolean;
+  onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
 }
 
 export interface FooterColumn {
@@ -189,14 +190,14 @@ const HWF_CSS = `
 .hwf-brand span { display: block; opacity: .62; }
 .hwf-col h3 { margin: 0 0 4px; font: inherit; opacity: .48; font-weight: 600; }
 .hwf-col ul { list-style: none; margin: 0; padding: 0; }
-.hwf-col a, .hwf-up {
+.hwf-col a, .hwf-col button, .hwf-up {
   color: inherit; text-decoration: none; opacity: .82; background: none; border: 0; padding: 0;
   font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer;
   background-image: linear-gradient(currentColor, currentColor); background-size: 0% 1px;
   background-repeat: no-repeat; background-position: 0 100%; transition: opacity .25s ease, background-size .35s cubic-bezier(.2,.7,.1,1);
 }
-.hwf-col a:hover, .hwf-up:hover { opacity: 1; background-size: 100% 1px; }
-.hwf-col a:focus-visible, .hwf-up:focus-visible { outline: 1px solid currentColor; outline-offset: 3px; opacity: 1; }
+.hwf-col a:hover, .hwf-col button:hover, .hwf-up:hover { opacity: 1; background-size: 100% 1px; }
+.hwf-col a:focus-visible, .hwf-col button:focus-visible, .hwf-up:focus-visible { outline: 1px solid currentColor; outline-offset: 3px; opacity: 1; }
 .hwf-rule {
   position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: center; gap: 16px;
   margin: clamp(18px, 2.6vw, 30px) clamp(20px, 3.4vw, 44px) 0; padding-top: 12px;
@@ -577,7 +578,11 @@ export function HalftoneWordmarkFooter({
                   href.startsWith("https://");
                 return (
                   <li key={l.label}>
-                    {isInternal ? (
+                    {l.onClick ? (
+                      <button type="button" onClick={l.onClick}>
+                        {l.label}
+                      </button>
+                    ) : isInternal ? (
                       <Link href={href}>{l.label}</Link>
                     ) : (
                       <a

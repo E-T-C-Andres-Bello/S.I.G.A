@@ -485,6 +485,65 @@ body {
   animation-play-state: paused;
 }
 
+/* ==================== 8. DESPLIEGUE LIGERO DE CREDENCIALES (SIN PARPADEO WEBGL) ==================== */
+@keyframes siga-sheen-sweep {
+  0% {
+    opacity: 0;
+    transform: translate3d(-120%, 0, 0) skewX(-18deg);
+  }
+  25% {
+    opacity: 0.65;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(160%, 0, 0) skewX(-18deg);
+  }
+}
+
+.siga-creds-fold {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 340ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.siga-creds-fold[data-state="open"] {
+  grid-template-rows: 1fr;
+}
+
+.siga-creds-fold-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.siga-creds-fold-content {
+  opacity: 0;
+  transform: translate3d(0, -8px, 0);
+  transition:
+    opacity 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 300ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.siga-creds-fold[data-state="open"] .siga-creds-fold-content {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  transition-delay: 45ms, 15ms;
+}
+
+.siga-creds-fold[data-state="open"] .siga-sheen-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 48%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(125, 211, 252, 0.2) 50%,
+    transparent 100%
+  );
+  pointer-events: none;
+  animation: siga-sheen-sweep 720ms cubic-bezier(0.22, 1, 0.36, 1) 80ms both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .siga-inview-reveal {
     opacity: 1 !important;
@@ -506,6 +565,327 @@ body {
   .air-cta-orb-2,
   .air-cta-orb-3,
   .air-tab-progress-bar {
+    animation: none !important;
+  }
+
+  .siga-creds-fold,
+  .siga-creds-fold-content {
+    transition: none !important;
+    transform: none !important;
+  }
+
+  .siga-creds-fold[data-state="open"] .siga-sheen-card::after {
+    animation: none !important;
+    display: none !important;
+  }
+}
+
+/* ==================== 9. DASHBOARD GLASSMORPHISM PERLA-COBALTO Y DOCK LÍQUIDO ==================== */
+:root {
+  --siga-glass-alpha: 0.58;
+  --siga-glass-blur: 18px;
+  --siga-glass-border-alpha: 0.62;
+  --ab-radar: #1c47c4;
+  --ab-rev-a: #38bdf8;
+  --ab-rev-b: #1c47c4;
+}
+
+.dark {
+  --siga-glass-alpha: 0.48;
+  --siga-glass-blur: 18px;
+  --siga-glass-border-alpha: 0.16;
+  --ab-radar: #38bdf8;
+  --ab-rev-a: #38bdf8;
+  --ab-rev-b: #60a5fa;
+}
+
+.font-kpi-num {
+  font-family: "Control TNT", var(--font-inter), system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+}
+
+.siga-dashboard-bg {
+  --muted-foreground: #3b4a61;
+  background:
+    radial-gradient(56% 52% at 6% 4%, rgba(28, 71, 196, 0.25) 0%, transparent 66%),
+    radial-gradient(54% 48% at 94% 12%, rgba(56, 189, 248, 0.28) 0%, transparent 64%),
+    radial-gradient(62% 54% at 80% 90%, rgba(99, 102, 241, 0.17) 0%, transparent 68%),
+    radial-gradient(52% 46% at 16% 92%, rgba(14, 165, 233, 0.22) 0%, transparent 66%),
+    linear-gradient(148deg, #d8e6fa 0%, #c4daf6 46%, #dfebfc 100%);
+}
+
+.dark .siga-dashboard-bg {
+  --muted-foreground: #94a3b8;
+  background:
+    radial-gradient(62% 54% at 14% 8%, rgba(28, 71, 196, 0.42) 0%, transparent 70%),
+    radial-gradient(52% 48% at 86% 16%, rgba(56, 189, 248, 0.18) 0%, transparent 68%),
+    radial-gradient(66% 58% at 52% 100%, rgba(11, 29, 89, 0.65) 0%, transparent 72%),
+    linear-gradient(160deg, #020617 0%, #07122e 52%, #040b21 100%);
+}
+
+/* Nivel z2: Superficie Glass principal con reflejo diagonal especular */
+.siga-glass-surface {
+  background-color: rgba(255, 255, 255, var(--siga-glass-alpha));
+  backdrop-filter: blur(var(--siga-glass-blur)) saturate(1.28);
+  -webkit-backdrop-filter: blur(var(--siga-glass-blur)) saturate(1.28);
+  border-color: rgba(255, 255, 255, calc(var(--siga-glass-border-alpha) * 0.92 + 0.16));
+  box-shadow:
+    0 20px 44px -24px rgba(15, 42, 105, 0.28),
+    0 2px 10px -2px rgba(28, 71, 196, 0.08),
+    inset 0 1px 1px rgba(255, 255, 255, 0.92),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.34);
+}
+
+.dark .siga-glass-surface {
+  background-color: rgba(8, 17, 42, var(--siga-glass-alpha));
+  backdrop-filter: blur(var(--siga-glass-blur)) saturate(1.24);
+  -webkit-backdrop-filter: blur(var(--siga-glass-blur)) saturate(1.24);
+  border-color: rgba(148, 163, 184, var(--siga-glass-border-alpha));
+  box-shadow:
+    0 20px 44px -22px rgba(2, 6, 23, 0.8),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+/* Nivel z1: Escenario interno de gráficas y bandejas anidadas */
+.siga-glass-inner {
+  background-color: rgba(255, 255, 255, calc(var(--siga-glass-alpha) * 0.55 + 0.08));
+  border-color: rgba(255, 255, 255, 0.58);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.72);
+}
+
+.dark .siga-glass-inner {
+  background-color: rgba(4, 10, 28, 0.46);
+  border-color: rgba(148, 163, 184, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.siga-glass-pill {
+  background-color: rgba(255, 255, 255, calc(var(--siga-glass-alpha) * 0.85 + 0.1));
+  backdrop-filter: blur(var(--siga-glass-blur)) saturate(1.25);
+  -webkit-backdrop-filter: blur(var(--siga-glass-blur)) saturate(1.25);
+  border-color: rgba(255, 255, 255, 0.72);
+  box-shadow:
+    0 8px 20px -12px rgba(15, 42, 105, 0.24),
+    inset 0 1px 1px rgba(255, 255, 255, 0.9);
+}
+
+.dark .siga-glass-pill {
+  background-color: rgba(10, 20, 48, calc(var(--siga-glass-alpha) * 0.9 + 0.08));
+  border-color: rgba(148, 163, 184, 0.22);
+  box-shadow:
+    0 12px 26px -14px rgba(2, 6, 23, 0.82),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.siga-glass-hero {
+  background:
+    radial-gradient(90% 115% at 88% 12%, rgba(56, 189, 248, 0.32) 0%, transparent 62%),
+    radial-gradient(70% 90% at 10% 95%, rgba(99, 102, 241, 0.24) 0%, transparent 60%),
+    linear-gradient(
+      135deg,
+      rgba(22, 58, 172, calc(var(--siga-glass-alpha) * 0.24 + 0.74)) 0%,
+      rgba(11, 31, 102, calc(var(--siga-glass-alpha) * 0.22 + 0.78)) 100%
+    );
+  backdrop-filter: blur(var(--siga-glass-blur)) saturate(1.3);
+  -webkit-backdrop-filter: blur(var(--siga-glass-blur)) saturate(1.3);
+  border-color: rgba(186, 230, 253, 0.42);
+  box-shadow:
+    0 26px 56px -22px rgba(22, 58, 172, 0.44),
+    inset 0 1px 1px rgba(255, 255, 255, 0.38);
+}
+
+.dark .siga-glass-hero {
+  background:
+    radial-gradient(92% 120% at 88% 12%, rgba(56, 189, 248, 0.26) 0%, transparent 62%),
+    linear-gradient(
+      135deg,
+      rgba(28, 71, 196, calc(var(--siga-glass-alpha) * 0.82 + 0.18)) 0%,
+      rgba(11, 29, 89, calc(var(--siga-glass-alpha) * 0.88 + 0.16)) 100%
+    );
+  border-color: rgba(125, 211, 252, 0.28);
+  box-shadow:
+    0 24px 54px -22px rgba(2, 6, 23, 0.78),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+/* ---------- Curved Glass Sidebar (Lente Cóncavo + Spotlight + Prisma 3D) ---------- */
+.siga-curved-backdrop {
+  background:
+    linear-gradient(
+      165deg,
+      rgba(255, 255, 255, calc(var(--siga-glass-alpha) * 0.88 + 0.1)) 0%,
+      rgba(235, 244, 255, calc(var(--siga-glass-alpha) * 0.78 + 0.08)) 50%,
+      rgba(255, 255, 255, calc(var(--siga-glass-alpha) * 0.86 + 0.1)) 100%
+    );
+  backdrop-filter: blur(calc(var(--siga-glass-blur) + 4px)) saturate(1.38);
+  -webkit-backdrop-filter: blur(calc(var(--siga-glass-blur) + 4px)) saturate(1.38);
+}
+
+.dark .siga-curved-backdrop {
+  background:
+    linear-gradient(
+      165deg,
+      rgba(15, 27, 62, calc(var(--siga-glass-alpha) * 0.88 + 0.18)) 0%,
+      rgba(7, 14, 36, calc(var(--siga-glass-alpha) * 0.92 + 0.22)) 52%,
+      rgba(13, 25, 58, calc(var(--siga-glass-alpha) * 0.88 + 0.18)) 100%
+    );
+  backdrop-filter: blur(calc(var(--siga-glass-blur) + 6px)) saturate(1.42);
+  -webkit-backdrop-filter: blur(calc(var(--siga-glass-blur) + 6px)) saturate(1.42);
+}
+
+.siga-curved-spotlight {
+  background: radial-gradient(
+    190px circle at var(--mx, 50%) var(--my, 28%),
+    rgba(56, 189, 248, 0.22) 0%,
+    rgba(28, 71, 196, 0.08) 45%,
+    transparent 78%
+  );
+  opacity: var(--spot-opacity, 0);
+  transition: opacity 280ms ease;
+}
+
+.dark .siga-curved-spotlight {
+  background: radial-gradient(
+    210px circle at var(--mx, 50%) var(--my, 28%),
+    rgba(125, 211, 252, 0.22) 0%,
+    rgba(56, 189, 248, 0.08) 45%,
+    transparent 78%
+  );
+}
+
+/* Botón activo con halo luminoso estilo segundo 00:01 del video */
+.siga-active-icon-glow {
+  background: linear-gradient(145deg, #1c47c4 0%, #102a7a 100%);
+  color: #ffffff;
+  box-shadow:
+    0 10px 24px -6px rgba(28, 71, 196, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.55),
+    inset 0 1px 1px rgba(255, 255, 255, 0.45);
+}
+
+.dark .siga-active-icon-glow {
+  background: linear-gradient(145deg, #ffffff 0%, #dbeafe 100%);
+  color: #060d24;
+  box-shadow:
+    0 10px 26px -4px rgba(255, 255, 255, 0.34),
+    0 0 16px -2px rgba(125, 211, 252, 0.42),
+    inset 0 1px 1px rgba(255, 255, 255, 0.95);
+}
+
+/* Pastilla deslizante para sub-opciones del árbol ╰─ (00:03–00:05 del video) */
+.siga-curved-sub-pill {
+  background: linear-gradient(
+    90deg,
+    rgba(28, 71, 196, 0.14) 0%,
+    rgba(56, 189, 248, 0.22) 100%
+  );
+  border: 1px solid rgba(28, 71, 196, 0.28);
+  box-shadow:
+    0 6px 18px -8px rgba(28, 71, 196, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.dark .siga-curved-sub-pill {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(125, 211, 252, 0.18) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  box-shadow:
+    0 8px 22px -8px rgba(2, 6, 23, 0.75),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+@keyframes siga-prism-levitate {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-3px) rotate(2.5deg);
+  }
+}
+
+.siga-prism-float {
+  animation: siga-prism-levitate 4.8s ease-in-out infinite;
+}
+
+/* ==================== 10. PANTALLA DE CARGA GLOBAL S.I.G.A. (ORB LOADER) ==================== */
+@keyframes loaderCircle {
+  0% {
+    transform: rotate(90deg);
+    box-shadow:
+      0 6px 12px 0 #38bdf8 inset,
+      0 12px 18px 0 #005dff inset,
+      0 36px 36px 0 #1e40af inset,
+      0 0 3px 1.2px rgba(56, 189, 248, 0.35),
+      0 0 6px 1.8px rgba(0, 93, 255, 0.25);
+  }
+  50% {
+    transform: rotate(270deg);
+    box-shadow:
+      0 6px 12px 0 #60a5fa inset,
+      0 12px 6px 0 #0284c7 inset,
+      0 24px 36px 0 #005dff inset,
+      0 0 3px 1.2px rgba(56, 189, 248, 0.35),
+      0 0 6px 1.8px rgba(0, 93, 255, 0.25);
+  }
+  100% {
+    transform: rotate(450deg);
+    box-shadow:
+      0 6px 12px 0 #4dc8fd inset,
+      0 12px 18px 0 #005dff inset,
+      0 36px 36px 0 #1e40af inset,
+      0 0 3px 1.2px rgba(56, 189, 248, 0.35),
+      0 0 6px 1.8px rgba(0, 93, 255, 0.25);
+  }
+}
+
+@keyframes loaderLetter {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: translateY(0);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  40% {
+    opacity: 0.7;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sigaLoaderExit {
+  0%,
+  72% {
+    opacity: 1;
+    visibility: visible;
+  }
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+.animate-loaderCircle {
+  animation: loaderCircle 5s linear infinite;
+}
+
+.animate-loaderLetter {
+  animation: loaderLetter 3s infinite;
+}
+
+.animate-siga-loader-autohide {
+  animation: sigaLoaderExit 1.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .siga-prism-float,
+  .animate-loaderCircle,
+  .animate-loaderLetter {
     animation: none !important;
   }
 }

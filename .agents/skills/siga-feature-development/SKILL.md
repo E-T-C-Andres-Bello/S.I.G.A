@@ -39,7 +39,7 @@ Adaptación directa de los estándares de ingeniería y seguridad de **VitaLink 
    - Toda modificación de calificaciones, cierres de momento y cambios críticos escribe en `audit_logs` (autor, valor anterior, valor nuevo, timestamp, IP/contexto).
    - `audit_logs` debe protegerse con trigger anti-tamper (`BEFORE UPDATE OR DELETE`) para garantizar inmutabilidad ante auditorías MPPE.
    - En logs de diagnóstico/telemetría nunca guardar cédulas o teléfonos completos en texto plano: usar sufijos (`cedula_last4` / `phone_last4`) o hashes.
-9. **Migraciones aplicadas son inmutables:** Si una migración ya se aplicó en remoto, jamás se edita: se crea una nueva con timestamp posterior (`YYYYMMDDHHMMSS_<nombre>.sql`) y se mantiene actualizado el esquema base y `src/types/database.types.ts`.
+9. **Migraciones aplicadas son inmutables y puramente DDL:** Si una migración ya se aplicó en remoto, jamás se edita: se crea una nueva con numeración secuencial (`00001_<nombre>.sql`, `00002_<nombre>.sql`, ...) **sin datos, catálogos ni credenciales (`INSERT`)** y se mantiene actualizado `src/types/database.types.ts`.
 10. **Confidencialidad reforzada en Orientación y Bienestar (K12):** Los expedientes de Orientación, actas de compromiso, vulnerabilidades socioeconómicas y seguimiento psicopedagógico tienen RLS estricto exclusivo para Orientación/Dirección (nunca visibles para otros docentes, alumnos ni representantes) y **nunca** entran en Supabase Realtime ni en cachés públicos.
 
 ---
@@ -48,7 +48,7 @@ Adaptación directa de los estándares de ingeniería y seguridad de **VitaLink 
 
 ### 3.1 Nueva Tabla en PostgreSQL / Supabase
 
-1. Crear migración con timestamp + `ALTER TABLE ... ENABLE ROW LEVEL SECURITY;`.
+1. Crear migración numerada secuencialmente (`0000N_<nombre>.sql`, solo DDL sin datos) + `ALTER TABLE ... ENABLE ROW LEVEL SECURITY;`.
 2. Definir políticas explícitas `TO authenticated` verificando rol y pertenencia (ej. estudiante solo lee lo suyo, docente solo sus secciones asignadas, representante solo sus hijos vinculados).
 3. Para tablas de auditoría (`grade_audit_logs`, `audit_logs`): políticas separadas `FOR INSERT` + `FOR SELECT` + trigger anti-modificación.
 4. Índices obligatorios según patrón de consulta (`(school_year_id, section_id)`, `(student_id, momento)`).
@@ -145,12 +145,25 @@ Verificar SIEMPRE estos puntos antes de dar por cerrada una feature:
    - PostgREST exige coincidencia exacta en nombre, tipo y cantidad de argumentos (`p_*`). Si cambias un RPC, actualiza `NOTIFY pgrst, 'reload schema';` y `src/types/database.types.ts`.
 7. **Orden topológico en borrados / cierres:**
    - Respetar claves foráneas `ON DELETE RESTRICT`: nunca eliminar un año escolar, sección o usuario referenciado sin limpiar/archivar en orden topológico o usar *soft-delete* auditado.
+8. **Fondos WebGL sin parpadeo negro (`parpadeo negro`) en animaciones y `ResizeObserver`:**
+   - Todo `<canvas>` WebGL dentro de un contenedor cuya altura cambia dinámicamente (ej. paneles desplegables in-place) borra su búfer a negro/transparente en el instante en que se reasigna `canvas.width` o `canvas.height`.
+   - Inicializar el contexto con `alpha: true` sobre un gradiente CSS de respaldo acorde al tema y **llamar síncronamente a `drawFrame(performance.now())` justo después de redimensionar** (`canvas.width = ...; gl.viewport(...); drawFrame(...)`).
+   - Nunca incluir estado React del puntero (`mousePosition`) en el arreglo de dependencias del `useEffect` que compila shaders ni redimensionar el canvas incondicionalmente por frame: mantener coordenadas del puntero en `useRef` o variables mutables dentro de un único ciclo.
+   - Evitar animar `filter: blur(...)` directamente sobre tarjetas con `backdrop-blur` encima de un `<canvas>` WebGL; animar únicamente `grid-template-rows`, `opacity` y `transform`.
+9. **Acceso Minimalista Directo en Portada (sin botón extra en header ni registro abierto):**
+   - El encabezado de portada se mantiene minimalista únicamente con la marca **S.I.G.A.** y el selector de tema (sin botón adicional de entrada).
+   - Debajo del titular del Hero se muestra directamente el botón **«Ingresar con Google»** (`@etcandresbello.org`) y debajo la opción **«Usar correo y contraseña»**, que despliega in-place (`grid-template-rows: 0fr -> 1fr` con `inert` al cerrarse y sin modales flotantes) únicamente los campos `Correo o cédula` y `Contraseña` más el botón `Ingresar`.
+   - No existe auto-registro abierto: el servidor exige cuenta `@etcandresbello.org` o cédula pre-inscrita en `public.users` con rol asignado en `user_roles`.
+10. **Migraciones SQL 100 % puras (DDL) y numeración secuencial (`00001_...`):**
+    - Toda migración en `supabase/migrations/` usa prefijo numérico secuencial (`00001_<nombre>.sql`, `00002_<nombre>.sql`, ...) y contiene **únicamente DDL** (esquemas, extensiones en `extensions`, tablas, índices, triggers, funciones, políticas RLS y `GRANT`/`REVOKE`).
+    - **Prohibido incluir `INSERT`, datos de prueba, catálogos ni credenciales dentro de `supabase/migrations/`.**
+    - Los catálogos no personales viven en `supabase/seed/catalogos_base.sql` y las semillas locales de desarrollo con credenciales de prueba viven exclusivamente en archivos `supabase/seed/*.local.sql` ignorados por `.gitignore` (jamás ejecutados en producción ni subidos a Git).
 
 ---
 
 ## 5. Checklist Final antes de Cerrar una Feature
 
-- [ ] Migración nueva con timestamp (sin editar migraciones ya aplicadas) + `database.types.ts` actualizado.
+- [ ] Migración nueva numerada secuencialmente (`0000N_<nombre>.sql`, solo DDL sin `INSERT`s y sin editar migraciones ya aplicadas) + `database.types.ts` actualizado.
 - [ ] Tablas nuevas con RLS activado + políticas explícitas `TO authenticated` + índices.
 - [ ] RPCs con `SECURITY DEFINER`, `SET search_path = public, pg_temp`, validación de rol/acceso al inicio y `REVOKE ... FROM PUBLIC, anon`.
 - [ ] Rutas públicas (`siga_public_*` / `/verificar`) con rate limit y sin fuga de PII.

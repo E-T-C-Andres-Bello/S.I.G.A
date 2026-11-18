@@ -5,14 +5,23 @@ import Image from "next/image";
 import Link from "next/link";
 import Lenis from "lenis";
 import {
+  AlertCircle,
   ArrowUpRight,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
+  Loader2,
   Pause,
   Play,
   Sparkles,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  GoogleWorkspaceGlyph,
+  SigaCredentialsFields,
+  resolveAuthErrorMessage,
+} from "@/components/auth/SigaCredentialsFields";
+import { startGoogleWorkspaceOAuth } from "@/lib/supabase/client";
 import { HalftoneWordmarkFooter } from "@/components/ui/halftone-wordmark-footer";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { cn } from "@/lib/utils";
@@ -196,13 +205,90 @@ export function SigaBaselineLanding() {
     width: 118,
   });
   const [activeSponsorIdx, setActiveSponsorIdx] = useState(0);
+  const [heroCredsOpen, setHeroCredsOpen] = useState(false);
+  const [googlePending, setGooglePending] = useState(false);
+  const [heroAuthError, setHeroAuthError] = useState<string | null>(null);
 
   const lenisRef = useRef<Lenis | null>(null);
   const tabButtonsRef = useRef<(HTMLButtonElement | null)[]>([]);
   const stage3DRef = useRef<HTMLDivElement>(null);
+  const googleLockRef = useRef(false);
+  const heroIdentifierRef = useRef<HTMLInputElement | null>(null);
 
   const activeRole = ROLE_MODULES[activeRoleIdx] ?? ROLE_MODULES[0];
   const activeSponsor = SPONSORS[activeSponsorIdx] ?? SPONSORS[0];
+
+  const handleDirectGoogleLogin = useCallback(async () => {
+    if (googleLockRef.current) return;
+    googleLockRef.current = true;
+    setHeroAuthError(null);
+    setGooglePending(true);
+
+    const result = await startGoogleWorkspaceOAuth("/");
+    if (!result.ok) {
+      setHeroAuthError(result.message);
+      setGooglePending(false);
+      googleLockRef.current = false;
+      if (lenisRef.current) {
+        lenisRef.current.scrollTo(0);
+      } else {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    }
+  }, []);
+
+  const toggleHeroCreds = useCallback(() => {
+    setHeroCredsOpen((prev) => {
+      const next = !prev;
+      if (next) {
+        window.setTimeout(() => {
+          heroIdentifierRef.current?.focus({ preventScroll: true });
+        }, 200);
+      }
+      return next;
+    });
+  }, []);
+
+  const openHeroCredsFromSection = useCallback(() => {
+    setHeroCredsOpen(true);
+    if (lenisRef.current) {
+      lenisRef.current.scrollTo(0);
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    window.setTimeout(() => {
+      heroIdentifierRef.current?.focus({ preventScroll: true });
+    }, 360);
+  }, []);
+
+  /* Si Google OAuth devolvió error (ej. dominio externo), mostrar aviso en el Hero */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("auth_error");
+    if (!code) return;
+
+    const msg = resolveAuthErrorMessage(code);
+    if (msg) {
+      setHeroAuthError(msg);
+    }
+
+    params.delete("auth_error");
+    const nextSearch = params.toString();
+    const cleanedUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}${window.location.hash}`;
+    window.history.replaceState(null, "", cleanedUrl);
+  }, []);
+
+  /* Permitir cerrar los campos desplegados con Esc */
+  useEffect(() => {
+    if (!heroCredsOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setHeroCredsOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [heroCredsOpen]);
 
   /* Sincronizar estado visual Claro / Oscuro con el DOM raíz */
   useEffect(() => {
@@ -371,24 +457,15 @@ export function SigaBaselineLanding() {
               </Link>
             </div>
 
-            {/* Columna Derecha: Interruptor Claro/Oscuro + Únicamente "Entrar a SIGA" */}
-            <div className="flex shrink-0 items-center justify-end gap-2 sm:gap-2.5 md:col-span-4">
+            {/* Columna Derecha: Interruptor Claro/Oscuro (encabezado minimalista sin botón extra) */}
+            <div className="flex shrink-0 items-center justify-end md:col-span-4">
               <ThemeToggle className="size-8.5 shrink-0 border-white/20 bg-white/10 text-white backdrop-blur-md hover:bg-white/20 focus-visible:outline-white" />
-              <Link
-                href="/login"
-                className="air-btn-primary inline-flex h-8.5 shrink-0 items-center rounded-full bg-white px-3.5 text-[12.5px] font-medium tracking-[0.01em] whitespace-nowrap text-[#020617] shadow-sm sm:px-4 sm:text-[13px]"
-              >
-                <span className="whitespace-nowrap">
-                  Entrar a SIGA
-                  <ChevronRight className="size-3.5 shrink-0" aria-hidden="true" />
-                </span>
-              </Link>
             </div>
           </div>
         </header>
 
-        {/* Titular principal centrado */}
-        <div className="relative z-10 mx-auto flex w-full max-w-5xl flex-1 flex-col items-center justify-center px-6 py-16 text-center">
+        {/* Titular principal + acceso minimalista directo debajo */}
+        <div className="relative z-10 mx-auto flex w-full max-w-5xl flex-1 flex-col items-center justify-center px-6 py-10 text-center">
           <h1
             id="hero-title"
             className="font-hero text-[5.7vw] leading-[1.12] font-medium tracking-[0.004em] text-white sm:text-[2.85rem] md:text-[3.35rem]"
@@ -420,6 +497,80 @@ export function SigaBaselineLanding() {
               </span>
             </span>
           </h1>
+
+          {/* Acciones directas minimalistas debajo del titular */}
+          <div
+            className={cn(
+              "air-phrase-reveal mt-7 flex w-full max-w-[20.5rem] flex-col items-center",
+              heroReady && "is-visible"
+            )}
+            style={{ transitionDelay: "340ms" }}
+          >
+            {heroAuthError ? (
+              <div
+                role="alert"
+                aria-live="polite"
+                className="mb-3.5 flex w-full items-start gap-2 rounded-xl border border-red-400/40 bg-red-950/70 px-3 py-2 text-left text-xs leading-relaxed text-red-100 backdrop-blur-md"
+              >
+                <AlertCircle className="mt-0.5 size-4 shrink-0 text-red-300" aria-hidden="true" />
+                <span>{heroAuthError}</span>
+              </div>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={handleDirectGoogleLogin}
+              disabled={googlePending}
+              className="air-btn-primary inline-flex h-11 cursor-pointer items-center justify-center rounded-full bg-white px-6 text-[13.5px] font-medium text-[#020617] shadow-[0_14px_34px_-12px_rgba(2,6,23,0.65)] transition-all hover:bg-white/95 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white disabled:pointer-events-none disabled:opacity-60"
+            >
+              <span className="!gap-2.5 whitespace-nowrap">
+                {googlePending ? (
+                  <Loader2 className="size-4 animate-spin text-[#1c47c4]" aria-hidden="true" />
+                ) : (
+                  <GoogleWorkspaceGlyph />
+                )}
+                <span>Ingresar con Google</span>
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={toggleHeroCreds}
+              aria-expanded={heroCredsOpen}
+              aria-controls="siga-hero-creds-panel"
+              className="mt-3 inline-flex cursor-pointer items-center gap-1.5 py-1 text-xs font-medium tracking-[0.01em] text-white/80 transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+            >
+              <span>Usar correo y contraseña</span>
+              <ChevronDown
+                className={cn(
+                  "size-3.5 transition-transform duration-300",
+                  heroCredsOpen && "rotate-180"
+                )}
+                aria-hidden="true"
+              />
+            </button>
+
+            {/* Despliegue limpio con únicamente correo/cédula y contraseña */}
+            <div
+              id="siga-hero-creds-panel"
+              data-state={heroCredsOpen ? "open" : "closed"}
+              aria-hidden={!heroCredsOpen}
+              inert={!heroCredsOpen ? true : undefined}
+              className="siga-creds-fold w-full"
+            >
+              <div className="siga-creds-fold-inner">
+                <div className="siga-creds-fold-content pt-3.5">
+                  <div className="siga-sheen-card relative overflow-hidden rounded-2xl border border-white/22 bg-[#06112d]/76 p-5 text-left shadow-[0_24px_60px_-16px_rgba(2,6,23,0.75)] backdrop-blur-xl">
+                    <SigaCredentialsFields
+                      identifierInputRef={heroIdentifierRef}
+                      onErrorMessage={setHeroAuthError}
+                      disabled={googlePending}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Fila inferior alineada correctamente */}
@@ -665,12 +816,14 @@ export function SigaBaselineLanding() {
 
                         <div className="flex items-center justify-between text-[11px] tracking-[0.012em] text-muted-foreground">
                           <span>Mueve el cursor para inclinar la vista</span>
-                          <Link
-                            href="/login"
-                            className="font-medium text-primary hover:underline"
+                          <button
+                            type="button"
+                            onClick={handleDirectGoogleLogin}
+                            disabled={googlePending}
+                            className="cursor-pointer font-medium text-primary hover:underline disabled:opacity-60"
                           >
-                            Entrar a SIGA →
-                          </Link>
+                            Ingresar con Google →
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -812,6 +965,7 @@ export function SigaBaselineLanding() {
 
         {/* ==================== CTA FINAL ==================== */}
         <section
+          id="siga-cta-acceso"
           aria-label="Acceso directo a S.I.G.A."
           className="mx-auto w-full max-w-6xl px-5 pb-16 sm:px-8 sm:pb-20"
         >
@@ -844,21 +998,34 @@ export function SigaBaselineLanding() {
                       del plantel
                     </h2>
                     <p className="mt-2 max-w-lg text-sm leading-relaxed tracking-[0.014em] text-white/75">
-                      Estudiantes, representantes, docentes y coordinación
-                      acceden desde cualquier teléfono o computadora.
+                      Estudiantes, docentes y coordinación acceden desde
+                      cualquier teléfono o computadora.
                     </p>
                   </div>
 
-                  <div className="flex items-center">
-                    <Link
-                      href="/login"
-                      className="air-btn-primary inline-flex h-11 items-center rounded-full bg-white px-7 text-sm font-medium tracking-[0.015em] text-[#020617]"
+                  <div className="flex flex-col items-start gap-2.5 sm:items-end">
+                    <button
+                      type="button"
+                      onClick={handleDirectGoogleLogin}
+                      disabled={googlePending}
+                      className="air-btn-primary inline-flex h-11 cursor-pointer items-center justify-center rounded-full bg-white px-6 text-sm font-medium tracking-[0.01em] text-[#020617] disabled:opacity-60"
                     >
-                      <span>
-                        Entrar a SIGA
-                        <ChevronRight className="size-4" aria-hidden="true" />
+                      <span className="!gap-2.5 whitespace-nowrap">
+                        {googlePending ? (
+                          <Loader2 className="size-4 animate-spin text-[#1c47c4]" aria-hidden="true" />
+                        ) : (
+                          <GoogleWorkspaceGlyph />
+                        )}
+                        <span>Ingresar con Google</span>
                       </span>
-                    </Link>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openHeroCredsFromSection}
+                      className="cursor-pointer text-xs font-medium text-white/75 transition-colors hover:text-white hover:underline"
+                    >
+                      Usar correo y contraseña ↑
+                    </button>
                   </div>
                 </div>
               </div>
@@ -883,7 +1050,10 @@ export function SigaBaselineLanding() {
               links: [
                 { label: "Explorar SIGA", href: "#funciones" },
                 { label: "Impulsado por", href: "#aliados" },
-                { label: "Entrar a SIGA", href: "/login" },
+                {
+                  label: "Ingresar con Google",
+                  onClick: handleDirectGoogleLogin,
+                },
               ],
             },
             {

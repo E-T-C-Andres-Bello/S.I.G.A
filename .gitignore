@@ -24,8 +24,14 @@ yarn-error.log*
 .env
 .env*.local
 
+# Local-only Supabase seeds (jamás subir credenciales de desarrollo a Git)
+/supabase/seed/*.local.sql
+
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
 
 
+
+# Sentry Config File
+.env.sentry-build-plugin

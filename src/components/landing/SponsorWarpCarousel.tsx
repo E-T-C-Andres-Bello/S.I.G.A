@@ -1104,7 +1104,7 @@ export function SponsorWarpCarousel({
   onIndexChange,
   autoplay = true,
   interval = 3.6667,
-  step = 2,
+  step = 1,
   background = "#efefef",
   glow,
   warp = 1,

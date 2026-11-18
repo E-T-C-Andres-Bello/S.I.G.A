@@ -177,7 +177,7 @@ export function AtmosphericGradient() {
     if (!container || !canvas) return;
 
     const gl = canvas.getContext("webgl", {
-      alpha: false,
+      alpha: true,
       antialias: false,
       powerPreference: "low-power",
     });
@@ -251,24 +251,6 @@ export function AtmosphericGradient() {
     let disposed = false;
     const start = performance.now();
 
-    const resize = () => {
-      bounds = container.getBoundingClientRect();
-      currentDpr = Math.min(window.devicePixelRatio || 1, 1.75);
-      const rawW = Math.max(1, Math.round(bounds.width * currentDpr));
-      const rawH = Math.max(1, Math.round(bounds.height * currentDpr));
-      const pixelScale = Math.min(
-        1,
-        Math.sqrt(2_000_000 / Math.max(1, rawW * rawH))
-      );
-      const width = Math.max(320, Math.round(rawW * pixelScale));
-      const height = Math.max(320, Math.round(rawH * pixelScale));
-      if (canvas.width !== width || canvas.height !== height) {
-        canvas.width = width;
-        canvas.height = height;
-        gl.viewport(0, 0, width, height);
-      }
-    };
-
     const drawFrame = (now: number) => {
       const dt = lastNow === null ? 0 : Math.min((now - lastNow) / 1000, 0.1);
       lastNow = now;
@@ -289,6 +271,26 @@ export function AtmosphericGradient() {
       gl.uniform1f(presenceLoc, reducedMotion ? 0 : cursorPresence);
       gl.uniform1f(darkLoc, darkMix);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
+    };
+
+    const resize = () => {
+      bounds = container.getBoundingClientRect();
+      currentDpr = Math.min(window.devicePixelRatio || 1, 1.75);
+      const rawW = Math.max(1, Math.round(bounds.width * currentDpr));
+      const rawH = Math.max(1, Math.round(bounds.height * currentDpr));
+      const pixelScale = Math.min(
+        1,
+        Math.sqrt(2_000_000 / Math.max(1, rawW * rawH))
+      );
+      const width = Math.max(320, Math.round(rawW * pixelScale));
+      const height = Math.max(320, Math.round(rawH * pixelScale));
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+        gl.viewport(0, 0, width, height);
+        // Redibujar síncronamente tras redimensionar evita que el buffer WebGL quede negro un frame.
+        drawFrame(performance.now());
+      }
     };
 
     const tick = (now: number) => {

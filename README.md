@@ -50,14 +50,15 @@ SIGA adopta una arquitectura **monolítica *serverless* full-stack** sobre Next.
 ### 2. Backend & Lógica de Servidor
 | Componente | Tecnología | Propósito Técnico |
 | :--- | :--- | :--- |
-| **Runtime y Endpoints** | **Node.js (Next.js Server Actions & Route Handlers)** | API REST y mutaciones *serverless* integradas sin servidor backend independiente. |
-| **Acceso a Datos / ORM** | **Prisma ORM o Drizzle ORM + `@supabase/supabase-js`** | Modelado relacional tipado, migraciones limpias y consultas nativas a PostgreSQL. |
-| **Tareas Programadas (Cron)** | **GitHub Actions / Inngest** | Ejecución asíncrona de resúmenes semanales, alertas de biblioteca y tareas programadas. |
+| **Runtime y Endpoints** | **Node.js (Next.js App Router) + Supabase Edge Functions (Deno)** | Next.js solo maneja sesión y variables de Supabase; toda orquestación sensible (Neon, cron, servicios externos) vive aislada en **Supabase Edge Functions**. |
+| **Acceso a Datos / ORM** | **Prisma ORM o Drizzle ORM + `@supabase/supabase-js`** | Modelado relacional tipado, migraciones limpias y consultas nativas bajo RLS. |
+| **Tareas Programadas (Cron)** | **`pg_cron` + `pg_net` / Edge Functions** | Ejecución asíncrona segura de respaldos hacia Neon, resúmenes semanales y limpieza de *branches*. |
 
-### 3. Base de Datos, Autenticación y Tiempo Real (BaaS)
+### 3. Base de Datos, Respaldo Activo, Analítica y Tiempo Real (BaaS)
 | Componente | Tecnología | Propósito Técnico |
 | :--- | :--- | :--- |
-| **Motor Relacional** | **PostgreSQL (Supabase / Neon)** | Esquema académico, administrativo y multi-sede (*Multi-Tenant*). |
+| **Motor Relacional Principal** | **PostgreSQL (Supabase)** | Esquema académico, administrativo y multi-sede (*Multi-Tenant*) en producción. |
+| **Respaldo Activo, Analítica y Labs** | **Neon (vía Supabase Edge Functions)** | Sistema de respaldo activo de Supabase, descarga de consultas pesadas de analítica/BI y *branching* instantáneo para prácticas SQL de **Telemática**, operado exclusivamente mediante **Supabase Edge Functions** sin exponer llaves de Neon en Next.js. |
 | **Seguridad a Nivel de Fila** | **PostgreSQL Row Level Security (RLS)** | Aislamiento estricto por rol: estudiantes solo leen sus notas; docentes solo editan sus secciones asignadas. |
 | **Autenticación** | **Supabase Auth / OAuth** | Cédula/Correo + contraseña, Google OAuth (`@etcandresbello.org`) y *Magic Links* sin registro para tutores externos. |
 | **Base Vectorial (RAG)** | **Extensión `pgvector`** | Almacenamiento de *embeddings* de guías docentes y libros dentro del mismo PostgreSQL para el Tutor IA. |
@@ -108,7 +109,7 @@ SIGA adopta una arquitectura **monolítica *serverless* full-stack** sobre Next.
 - Módulo propio integrado en SIGA para inventario bibliográfico digital con código QR por ejemplar, control de préstamos domiciliarios mediante el Carnet Digital estudiantil con alertas de vencimiento y gestión de reserva/entrega de equipos audiovisuales (videobeams, laptops, cornetas) para docentes.
 
 ### 4.1 Entornos Exclusivos por Mención Técnica (1.º a 6.º Año)
-- **Telemática:** *Sandbox* de código y SQL en el Aula Virtual, herramientas prácticas de direccionamiento IP y cableado estructurado (T568A/B), y bitácora técnica de diagnóstico/mantenimiento del laboratorio TI.
+- **Telemática:** *Sandbox* de código y SQL apoyado en ramas aisladas (*branching*) sobre **Neon PostgreSQL Serverless**, herramientas prácticas de direccionamiento IP y cableado estructurado (T568A/B), y bitácora técnica de diagnóstico/mantenimiento del laboratorio TI.
 - **Aduanas:** Simulador de clasificación arancelaria (Sistema Armonizado), calculadora de valoración aduanera (CIF/FOB, Incoterms y tributos) y taller documental con facturas comerciales, *Bill of Lading* (B/L) y guías aéreas.
 - **Turismo:** Repositorio de rutas patrimoniales y ecoturísticas de Ciudad Guayana/Bolívar, gestor de eventos protocolares y ferias culturales/gastronómicas, y simulador de recepción hotelera (*check-in/check-out*) con guiones bilingües.
 
@@ -217,6 +218,7 @@ SIGA contará con un **Landing Page propio** (`src/app/(landing)/`) diseñado es
 
 - **Contexto institucional migrado:** [`docs/CONTEXTO_INSTITUCIONAL.md`](docs/CONTEXTO_INSTITUCIONAL.md)
 - **Estructura de carpetas y rutas del stack:** [`docs/ESTRUCTURA_PROYECTO.md`](docs/ESTRUCTURA_PROYECTO.md)
+- **Arquitectura híbrida Supabase + Neon (Edge Functions):** [`docs/ARQUITECTURA_SUPABASE_NEON.md`](docs/ARQUITECTURA_SUPABASE_NEON.md)
 
 ---
 
@@ -225,13 +227,14 @@ SIGA contará con un **Landing Page propio** (`src/app/(landing)/`) diseñado es
 Este proyecto educativo sin fines de lucro es posible gracias al apoyo de iniciativas de código abierto y programas educativos verificados en el portal institucional:
 
 - **GitHub:** Control de versiones, repositorio *open source* y automatización CI/CD.
-- **Cloudflare (Project Galileo):** Aceleración global, protección WAF, DNS e infraestructura Edge para `etcandresbello.org`.
-- **Supabase:** Base de datos PostgreSQL en tiempo real, autenticación estudiantil, `pgvector` y respaldo seguro.
-- **Google Workspace for Education:** Cuentas institucionales (`@etcandresbello.org`), colaboración académica y almacenamiento documental.
-- **Mailtrap:** Infraestructura patrocinada (planes Básico y Teams) para pruebas seguras y entrega de correos transaccionales escolares.
+- **Cloudflare:** Aceleración global, protección WAF, DNS e infraestructura Edge para `etcandresbello.org`.
+- **Supabase:** Base de datos PostgreSQL principal en tiempo real, autenticación estudiantil, RLS y `pgvector`.
+- **Neon:** Respaldo activo de Supabase, consultas de analítica académica/BI sin sobrecargar producción y bases de datos *serverless* para los laboratorios de **Telemática**.
+- **Google Workspace:** Identidad institucional (`@etcandresbello.org`), colaboración académica y almacenamiento documental.
+- **Mailtrap:** Pruebas seguras y entrega confiable de correos transaccionales escolares.
 - **PostHog:** Analítica de producto, métricas de rendimiento y telemetría académica de SIGA.
-- **Figma (Educación K12):** Diseño de interfaces y prototipado UI/UX colaborativo.
-- **Sentry (Educación / Open Source):** Monitoreo de errores, trazabilidad y diagnóstico en tiempo real.
+- **Figma:** Diseño de interfaces y prototipado UI/UX colaborativo.
+- **Sentry:** Monitoreo de errores, trazabilidad y diagnóstico en tiempo real.
 - **Hosting & Despliegue Open Source:** [This site is powered by Netlify](https://www.netlify.com) / Vercel.
 
 ---
