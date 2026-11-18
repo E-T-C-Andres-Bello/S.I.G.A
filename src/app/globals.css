@@ -65,24 +65,39 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
   --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
 :root {
   /* Paleta original Navy -> Azul institucional (#1c47c4) -> Blanco hielo (#f7fafb) */
+  --radius: 0.75rem;
   --background: #f7fafb;
   --foreground: #090d16;
   --muted: #eef2f6;
   --muted-foreground: #526075;
   --card: #ffffff;
   --card-foreground: #090d16;
+  --popover: #ffffff;
+  --popover-foreground: #090d16;
   --border: #dfe6ef;
+  --input: #cbd5e1;
+  --ring: #1c47c4;
 
   --primary: #1c47c4;
   --primary-foreground: #ffffff;
@@ -90,6 +105,8 @@
   --secondary-foreground: #0f172a;
   --accent: #e8eefb;
   --accent-foreground: #1c47c4;
+  --destructive: #e11d48;
+  --destructive-foreground: #ffffff;
   --siga-spin-rgb: 28, 71, 196;
   --siga-scroll-brand: #e0f2fe;
 
@@ -105,7 +122,11 @@
   --muted-foreground: #94a3b8;
   --card: #081024;
   --card-foreground: #f8fafc;
+  --popover: #0b1633;
+  --popover-foreground: #f8fafc;
   --border: rgba(148, 163, 184, 0.16);
+  --input: rgba(148, 163, 184, 0.24);
+  --ring: #5790e6;
 
   --primary: #5790e6;
   --primary-foreground: #020617;
@@ -113,6 +134,8 @@
   --secondary-foreground: #e2e8f0;
   --accent: #10214a;
   --accent-foreground: #7dd3fc;
+  --destructive: #f43f5e;
+  --destructive-foreground: #020617;
   --siga-spin-rgb: 125, 211, 252;
   --siga-scroll-brand: #f8fafc;
 }
@@ -191,11 +214,9 @@ body {
   position: absolute;
   inset: -40%;
   z-index: -1;
-  background: radial-gradient(
-    55% 80% at 50% 100%,
-    rgba(87, 144, 230, 0.48) 0%,
-    rgba(28, 71, 196, 0) 75%
-  );
+  background: radial-gradient(55% 80% at 50% 100%,
+      rgba(87, 144, 230, 0.48) 0%,
+      rgba(28, 71, 196, 0) 75%);
   transform: skewX(45deg) rotate(0deg);
   transition: transform 650ms var(--ease-air-out), opacity 450ms var(--ease-air-out);
   opacity: 0.75;
@@ -219,11 +240,9 @@ body {
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: radial-gradient(
-    45% 80% at 50% 100%,
-    rgba(125, 211, 252, 0.55) 0%,
-    rgba(28, 71, 196, 0) 100%
-  );
+  background: radial-gradient(45% 80% at 50% 100%,
+      rgba(125, 211, 252, 0.55) 0%,
+      rgba(28, 71, 196, 0) 100%);
   transform: translate3d(0, 0, 0) scale(1);
   transition: transform 650ms var(--ease-air-out);
 }
@@ -232,14 +251,14 @@ body {
   transform: translate3d(25%, 0, 0) scale(2.8);
 }
 
-.air-btn-primary > span {
+.air-btn-primary>span {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
   transition: transform 300ms var(--ease-air-out);
 }
 
-.air-btn-primary:hover > span {
+.air-btn-primary:hover>span {
   transform: scale(1.04);
 }
 
@@ -307,11 +326,9 @@ body {
   background-image: radial-gradient(rgba(28, 71, 196, 0.16) 1px, transparent 1px);
   background-size: 20px 20px;
   background-position: center center;
-  mask-image: radial-gradient(
-    ellipse 68% 58% at 50% 50%,
-    #000 60%,
-    transparent 100%
-  );
+  mask-image: radial-gradient(ellipse 68% 58% at 50% 50%,
+      #000 60%,
+      transparent 100%);
 }
 
 .dark .air-dot-grid {
@@ -322,6 +339,7 @@ body {
   from {
     transform: translate(-50%, -50%) rotate(0deg);
   }
+
   to {
     transform: translate(-50%, -50%) rotate(360deg);
   }
@@ -338,14 +356,12 @@ body {
   inset: 0;
   border-radius: inherit;
   padding: 1.5px;
-  background: conic-gradient(
-    from 0deg,
-    rgba(var(--siga-spin-rgb), 0.12) 0deg,
-    rgba(var(--siga-spin-rgb), 0.85) 75deg,
-    rgba(var(--siga-spin-rgb), 0.95) 140deg,
-    rgba(223, 230, 239, 0.2) 220deg,
-    rgba(var(--siga-spin-rgb), 0.12) 360deg
-  );
+  background: conic-gradient(from 0deg,
+      rgba(var(--siga-spin-rgb), 0.12) 0deg,
+      rgba(var(--siga-spin-rgb), 0.85) 75deg,
+      rgba(var(--siga-spin-rgb), 0.95) 140deg,
+      rgba(223, 230, 239, 0.2) 220deg,
+      rgba(var(--siga-spin-rgb), 0.12) 360deg);
   -webkit-mask:
     linear-gradient(#fff 0 0) content-box,
     linear-gradient(#fff 0 0);
@@ -369,14 +385,12 @@ body {
   left: 50%;
   width: 180%;
   aspect-ratio: 1 / 1;
-  background: conic-gradient(
-    rgba(var(--siga-spin-rgb), 0.08) 0deg,
-    rgba(var(--siga-spin-rgb), 0.85) 65deg,
-    rgba(var(--siga-spin-rgb), 0.95) 130deg,
-    rgba(var(--siga-spin-rgb), 0.08) 210deg,
-    rgba(var(--siga-spin-rgb), 0.65) 295deg,
-    rgba(var(--siga-spin-rgb), 0.08) 360deg
-  );
+  background: conic-gradient(rgba(var(--siga-spin-rgb), 0.08) 0deg,
+      rgba(var(--siga-spin-rgb), 0.85) 65deg,
+      rgba(var(--siga-spin-rgb), 0.95) 130deg,
+      rgba(var(--siga-spin-rgb), 0.08) 210deg,
+      rgba(var(--siga-spin-rgb), 0.65) 295deg,
+      rgba(var(--siga-spin-rgb), 0.08) 360deg);
   animation: air-border-spin 18s linear infinite;
   pointer-events: none;
   z-index: 0;
@@ -391,6 +405,7 @@ body {
   from {
     transform: scaleX(0);
   }
+
   to {
     transform: scaleX(1);
   }
@@ -431,6 +446,7 @@ body {
   0% {
     transform: rotate(0deg);
   }
+
   100% {
     transform: rotate(360deg);
   }
@@ -440,6 +456,7 @@ body {
   0% {
     transform: scale(0.75);
   }
+
   100% {
     transform: scale(1.35);
   }
@@ -469,6 +486,7 @@ body {
   from {
     transform: translate3d(0, 0, 0);
   }
+
   to {
     transform: translate3d(-50%, 0, 0);
   }
@@ -491,9 +509,11 @@ body {
     opacity: 0;
     transform: translate3d(-120%, 0, 0) skewX(-18deg);
   }
+
   25% {
     opacity: 0.65;
   }
+
   100% {
     opacity: 0;
     transform: translate3d(160%, 0, 0) skewX(-18deg);
@@ -534,12 +554,10 @@ body {
   position: absolute;
   inset: 0;
   width: 48%;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(125, 211, 252, 0.2) 50%,
-    transparent 100%
-  );
+  background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(125, 211, 252, 0.2) 50%,
+      transparent 100%);
   pointer-events: none;
   animation: siga-sheen-sweep 720ms cubic-bezier(0.22, 1, 0.36, 1) 80ms both;
 }
@@ -558,6 +576,7 @@ body {
     transform: none !important;
     opacity: 1 !important;
   }
+
   .siga-marquee-track,
   .air-animated-border-spin::before,
   .air-cta-orbs,
@@ -602,7 +621,8 @@ body {
 .font-kpi-num {
   font-family: "Control TNT", var(--font-inter), system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.04em;
+  letter-spacing: 0.015em;
+  word-spacing: 0.08em;
 }
 
 .siga-dashboard-bg {
@@ -682,11 +702,9 @@ body {
   background:
     radial-gradient(90% 115% at 88% 12%, rgba(56, 189, 248, 0.32) 0%, transparent 62%),
     radial-gradient(70% 90% at 10% 95%, rgba(99, 102, 241, 0.24) 0%, transparent 60%),
-    linear-gradient(
-      135deg,
+    linear-gradient(135deg,
       rgba(22, 58, 172, calc(var(--siga-glass-alpha) * 0.24 + 0.74)) 0%,
-      rgba(11, 31, 102, calc(var(--siga-glass-alpha) * 0.22 + 0.78)) 100%
-    );
+      rgba(11, 31, 102, calc(var(--siga-glass-alpha) * 0.22 + 0.78)) 100%);
   backdrop-filter: blur(var(--siga-glass-blur)) saturate(1.3);
   -webkit-backdrop-filter: blur(var(--siga-glass-blur)) saturate(1.3);
   border-color: rgba(186, 230, 253, 0.42);
@@ -698,11 +716,9 @@ body {
 .dark .siga-glass-hero {
   background:
     radial-gradient(92% 120% at 88% 12%, rgba(56, 189, 248, 0.26) 0%, transparent 62%),
-    linear-gradient(
-      135deg,
+    linear-gradient(135deg,
       rgba(28, 71, 196, calc(var(--siga-glass-alpha) * 0.82 + 0.18)) 0%,
-      rgba(11, 29, 89, calc(var(--siga-glass-alpha) * 0.88 + 0.16)) 100%
-    );
+      rgba(11, 29, 89, calc(var(--siga-glass-alpha) * 0.88 + 0.16)) 100%);
   border-color: rgba(125, 211, 252, 0.28);
   box-shadow:
     0 24px 54px -22px rgba(2, 6, 23, 0.78),
@@ -712,46 +728,38 @@ body {
 /* ---------- Curved Glass Sidebar (Lente Cóncavo + Spotlight + Prisma 3D) ---------- */
 .siga-curved-backdrop {
   background:
-    linear-gradient(
-      165deg,
+    linear-gradient(165deg,
       rgba(255, 255, 255, calc(var(--siga-glass-alpha) * 0.88 + 0.1)) 0%,
       rgba(235, 244, 255, calc(var(--siga-glass-alpha) * 0.78 + 0.08)) 50%,
-      rgba(255, 255, 255, calc(var(--siga-glass-alpha) * 0.86 + 0.1)) 100%
-    );
+      rgba(255, 255, 255, calc(var(--siga-glass-alpha) * 0.86 + 0.1)) 100%);
   backdrop-filter: blur(calc(var(--siga-glass-blur) + 4px)) saturate(1.38);
   -webkit-backdrop-filter: blur(calc(var(--siga-glass-blur) + 4px)) saturate(1.38);
 }
 
 .dark .siga-curved-backdrop {
   background:
-    linear-gradient(
-      165deg,
+    linear-gradient(165deg,
       rgba(15, 27, 62, calc(var(--siga-glass-alpha) * 0.88 + 0.18)) 0%,
       rgba(7, 14, 36, calc(var(--siga-glass-alpha) * 0.92 + 0.22)) 52%,
-      rgba(13, 25, 58, calc(var(--siga-glass-alpha) * 0.88 + 0.18)) 100%
-    );
+      rgba(13, 25, 58, calc(var(--siga-glass-alpha) * 0.88 + 0.18)) 100%);
   backdrop-filter: blur(calc(var(--siga-glass-blur) + 6px)) saturate(1.42);
   -webkit-backdrop-filter: blur(calc(var(--siga-glass-blur) + 6px)) saturate(1.42);
 }
 
 .siga-curved-spotlight {
-  background: radial-gradient(
-    190px circle at var(--mx, 50%) var(--my, 28%),
-    rgba(56, 189, 248, 0.22) 0%,
-    rgba(28, 71, 196, 0.08) 45%,
-    transparent 78%
-  );
+  background: radial-gradient(190px circle at var(--mx, 50%) var(--my, 28%),
+      rgba(56, 189, 248, 0.22) 0%,
+      rgba(28, 71, 196, 0.08) 45%,
+      transparent 78%);
   opacity: var(--spot-opacity, 0);
   transition: opacity 280ms ease;
 }
 
 .dark .siga-curved-spotlight {
-  background: radial-gradient(
-    210px circle at var(--mx, 50%) var(--my, 28%),
-    rgba(125, 211, 252, 0.22) 0%,
-    rgba(56, 189, 248, 0.08) 45%,
-    transparent 78%
-  );
+  background: radial-gradient(210px circle at var(--mx, 50%) var(--my, 28%),
+      rgba(125, 211, 252, 0.22) 0%,
+      rgba(56, 189, 248, 0.08) 45%,
+      transparent 78%);
 }
 
 /* Botón activo con halo luminoso estilo segundo 00:01 del video */
@@ -775,11 +783,9 @@ body {
 
 /* Pastilla deslizante para sub-opciones del árbol ╰─ (00:03–00:05 del video) */
 .siga-curved-sub-pill {
-  background: linear-gradient(
-    90deg,
-    rgba(28, 71, 196, 0.14) 0%,
-    rgba(56, 189, 248, 0.22) 100%
-  );
+  background: linear-gradient(90deg,
+      rgba(28, 71, 196, 0.14) 0%,
+      rgba(56, 189, 248, 0.22) 100%);
   border: 1px solid rgba(28, 71, 196, 0.28);
   box-shadow:
     0 6px 18px -8px rgba(28, 71, 196, 0.28),
@@ -787,11 +793,9 @@ body {
 }
 
 .dark .siga-curved-sub-pill {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.14) 0%,
-    rgba(125, 211, 252, 0.18) 100%
-  );
+  background: linear-gradient(90deg,
+      rgba(255, 255, 255, 0.14) 0%,
+      rgba(125, 211, 252, 0.18) 100%);
   border: 1px solid rgba(255, 255, 255, 0.26);
   box-shadow:
     0 8px 22px -8px rgba(2, 6, 23, 0.75),
@@ -799,9 +803,12 @@ body {
 }
 
 @keyframes siga-prism-levitate {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translateY(0px) rotate(0deg);
   }
+
   50% {
     transform: translateY(-3px) rotate(2.5deg);
   }
@@ -822,6 +829,7 @@ body {
       0 0 3px 1.2px rgba(56, 189, 248, 0.35),
       0 0 6px 1.8px rgba(0, 93, 255, 0.25);
   }
+
   50% {
     transform: rotate(270deg);
     box-shadow:
@@ -831,6 +839,7 @@ body {
       0 0 3px 1.2px rgba(56, 189, 248, 0.35),
       0 0 6px 1.8px rgba(0, 93, 255, 0.25);
   }
+
   100% {
     transform: rotate(450deg);
     box-shadow:
@@ -843,15 +852,18 @@ body {
 }
 
 @keyframes loaderLetter {
+
   0%,
   100% {
     opacity: 0.4;
     transform: translateY(0);
   }
+
   20% {
     opacity: 1;
     transform: scale(1.15);
   }
+
   40% {
     opacity: 0.7;
     transform: translateY(0);
@@ -859,11 +871,13 @@ body {
 }
 
 @keyframes sigaLoaderExit {
+
   0%,
   72% {
     opacity: 1;
     visibility: visible;
   }
+
   100% {
     opacity: 0;
     visibility: hidden;
@@ -883,6 +897,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .siga-prism-float,
   .animate-loaderCircle,
   .animate-loaderLetter {

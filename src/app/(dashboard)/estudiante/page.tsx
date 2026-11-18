@@ -1,6 +1,13 @@
 import type { Metadata } from "next";
-import { StudentDashboardView } from "@/components/dashboard/StudentDashboardView";
+import {
+  StudentDashboardView,
+  type StudentPortalTab,
+} from "@/components/dashboard/StudentDashboardView";
+import { ProvisionalStudentOnboardingView } from "@/components/estudiante/ProvisionalStudentOnboardingView";
 import { getStudentDashboardData } from "@/features/estudiante/dashboard-data";
+import { getProvisionalStudentOnboardingData } from "@/features/estudiante/provisional-data";
+import { generateStudentCarnetTokenAction } from "@/features/estudiante/student-actions";
+import { getStudentTramitesData } from "@/features/estudiante/tramites-data";
 import { getAuthenticatedDashboardContext } from "@/lib/supabase/dashboard-session";
 
 export const metadata: Metadata = {
@@ -31,19 +38,104 @@ function getCaracasTimeContext(): { todayIso: string; greeting: string } {
   };
 }
 
-export default async function EstudianteHomePage() {
-  const profile = await getAuthenticatedDashboardContext();
-  const [{ todayIso, greeting }, dashboardData] = await Promise.all([
-    Promise.resolve(getCaracasTimeContext()),
-    getStudentDashboardData(profile.internalUserId),
+interface EstudianteHomePageProps {
+  searchParams: Promise<{
+    auth_error?: string;
+    workspace_linked?: string;
+    tab?: string;
+    requestType?: string;
+    subject?: string;
+  }>;
+}
+
+const VALID_TABS = new Set<StudentPortalTab>([
+  "resumen",
+  "horario",
+  "simulador",
+  "carnet",
+  "tramites",
+]);
+
+const VALID_REQUEST_TYPES = new Set([
+  "constancia_estudio",
+  "constancia_inscripcion",
+  "solvencia",
+  "revision_notas",
+] as const);
+
+export default async function EstudianteHomePage({
+  searchParams,
+}: EstudianteHomePageProps) {
+  const [profile, params] = await Promise.all([
+    getAuthenticatedDashboardContext(),
+    searchParams,
   ]);
+
+  if (profile.accessTier === "provisional_cedula") {
+    const onboarding = await getProvisionalStudentOnboardingData(
+      profile.internalUserId
+    );
+    return (
+      <ProvisionalStudentOnboardingView
+        profile={profile}
+        onboarding={onboarding}
+        authErrorCode={params.auth_error ?? null}
+      />
+    );
+  }
+
+  const initialTab: StudentPortalTab =
+    params.tab && VALID_TABS.has(params.tab as StudentPortalTab)
+      ? (params.tab as StudentPortalTab)
+      : "resumen";
+
+  const initialRequestType =
+    params.requestType &&
+    VALID_REQUEST_TYPES.has(
+      params.requestType as
+        | "constancia_estudio"
+        | "constancia_inscripcion"
+        | "solvencia"
+        | "revision_notas"
+    )
+      ? (params.requestType as
+          | "constancia_estudio"
+          | "constancia_inscripcion"
+          | "solvencia"
+          | "revision_notas")
+      : undefined;
+
+  const cleanSubject = params.subject?.trim().slice(0, 120);
+  const initialRequestReason =
+    initialRequestType === "revision_notas" && cleanSubject
+      ? `Solicito revisión formal de calificación en ${cleanSubject}: `
+      : undefined;
+
+  const [{ todayIso, greeting }, dashboardData, tramitesData, carnetResult] =
+    await Promise.all([
+      Promise.resolve(getCaracasTimeContext()),
+      getStudentDashboardData(profile.internalUserId, profile.accessTier),
+      getStudentTramitesData(profile.internalUserId),
+      initialTab === "carnet"
+        ? generateStudentCarnetTokenAction(120)
+        : Promise.resolve(null),
+    ]);
 
   return (
     <StudentDashboardView
       profile={profile}
       data={dashboardData}
+      tramitesData={tramitesData}
+      initialCarnetToken={carnetResult && carnetResult.ok ? carnetResult.data : null}
+      initialCarnetError={
+        carnetResult && !carnetResult.ok ? carnetResult.message : null
+      }
       todayIso={todayIso}
       greeting={greeting}
+      initialTab={initialTab}
+      justLinkedWorkspace={params.workspace_linked === "1"}
+      initialRequestType={initialRequestType}
+      initialRequestReason={initialRequestReason}
     />
   );
 }

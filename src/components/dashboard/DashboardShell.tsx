@@ -1,13 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Dialog, Popover } from "radix-ui";
 import { Bell, ChevronDown, Loader2, LogOut, Menu, X } from "lucide-react";
 import { MotionConfig } from "motion/react";
 import { cn } from "cn";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { SigaGlobalLoader } from "@/components/ui/ai-loader";
+import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { getBrowserSupabaseClient } from "@/lib/supabase/client";
 import type { DashboardUserProfile } from "@/lib/supabase/dashboard-session";
 import { formatVenezuelanCedulaDisplay } from "@/lib/validators/auth";
@@ -20,6 +22,7 @@ const INTRO_SHOWN_KEY = "siga-intro-shown-v1";
 
 export interface DashboardShellProps {
   profile: DashboardUserProfile;
+  devToolbar?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -27,8 +30,15 @@ export interface DashboardShellProps {
  * Shell compartido para `(dashboard)` con fondo gradiente Perla-Cobalto (sin foto),
  * Curved Glass Sidebar en el lateral izquierdo y perfil del usuario en la esquina superior derecha.
  */
-export function DashboardShell({ profile, children }: DashboardShellProps) {
+export function DashboardShell({
+  profile,
+  devToolbar = null,
+  children,
+}: DashboardShellProps) {
+  const pathname = usePathname();
   const router = useRouter();
+  const isStandaloneAulaVirtual =
+    pathname === "/aula-virtual" || pathname.startsWith("/aula-virtual/");
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [sidebarExpanded, setSidebarExpanded] = React.useState(false);
   const [signingOut, setSigningOut] = React.useState(false);
@@ -100,10 +110,27 @@ export function DashboardShell({ profile, children }: DashboardShellProps) {
 
   const initials = `${profile.firstName.charAt(0)}${profile.lastName.charAt(0)}`.toUpperCase();
 
+  if (isStandaloneAulaVirtual) {
+    return (
+      <MotionConfig reducedMotion="user">
+        <TooltipProvider delayDuration={180}>
+          <GlassThemeProvider>
+            <main id="main" className="min-h-screen w-full outline-none">
+              {children}
+            </main>
+            {devToolbar}
+            <Toaster position="bottom-right" richColors />
+          </GlassThemeProvider>
+        </TooltipProvider>
+      </MotionConfig>
+    );
+  }
+
   return (
     <MotionConfig reducedMotion="user">
-      <GlassThemeProvider>
-        <div className="siga-dashboard-bg font-hero relative min-h-screen text-foreground transition-colors duration-300">
+      <TooltipProvider delayDuration={180}>
+        <GlassThemeProvider>
+          <div className="siga-dashboard-bg font-hero relative min-h-screen text-foreground transition-colors duration-300">
           {showIntroLoader ? (
             <SigaGlobalLoader
               text="S.I.G.A."
@@ -319,13 +346,19 @@ export function DashboardShell({ profile, children }: DashboardShellProps) {
                 </div>
               </header>
 
-              <main id="main" className="min-w-0 flex-1">
+              <main
+                id="main"
+                className={cn("min-w-0 flex-1", devToolbar && "pb-16")}
+              >
                 {children}
               </main>
             </div>
           </div>
-        </div>
-      </GlassThemeProvider>
+          </div>
+          {devToolbar}
+          <Toaster position="bottom-right" richColors />
+        </GlassThemeProvider>
+      </TooltipProvider>
     </MotionConfig>
   );
 }

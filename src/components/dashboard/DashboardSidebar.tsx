@@ -8,6 +8,7 @@ import { motion } from "motion/react";
 import { Popover } from "radix-ui";
 import {
   Bell,
+  BookOpenCheck,
   Home,
   Loader2,
   LogOut,
@@ -202,18 +203,36 @@ export function DashboardSidebar({
   const innerGradId = `siga-curved-inner-${rawUid}`;
 
   const homeHref = ROLE_HOME_PATH[profile.primaryRole] ?? "/estudiante";
+  const canAccessAulaVirtual =
+    profile.primaryRole === "estudiante" ||
+    profile.primaryRole === "docente" ||
+    profile.primaryRole === "coordinador_mencion" ||
+    profile.primaryRole === "direccion";
+  const isInsideAulaVirtual =
+    pathname === "/aula-virtual" || pathname.startsWith("/aula-virtual/");
+  const crystalPortalHref = isInsideAulaVirtual ? homeHref : "/aula-virtual";
 
-  const navItems = React.useMemo<SidebarNavItem[]>(
-    () => [
+  const navItems = React.useMemo<SidebarNavItem[]>(() => {
+    const items: SidebarNavItem[] = [
       {
         id: "home",
         label: "Inicio",
         href: homeHref,
         icon: Home,
       },
-    ],
-    [homeHref]
-  );
+    ];
+
+    if (profile.primaryRole === "estudiante") {
+      items.push({
+        id: "asignaturas",
+        label: "Asignaturas y Pensum",
+        href: "/estudiante/asignaturas",
+        icon: BookOpenCheck,
+      });
+    }
+
+    return items;
+  }, [homeHref, profile.primaryRole]);
 
   const asideRef = React.useRef<HTMLElement | null>(null);
   const [size, setSize] = React.useState({
@@ -527,18 +546,26 @@ export function DashboardSidebar({
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive =
-              pathname === item.href || pathname.startsWith(`${item.href}/`);
+              item.href === homeHref
+                ? pathname === item.href
+                : pathname === item.href || pathname.startsWith(`${item.href}/`);
             const isHovered = hoveredNavId === item.id;
 
             return expanded ? (
               <Link
                 key={item.id}
                 href={item.href}
+                prefetch={true}
                 onClick={onNavigate}
                 onMouseEnter={() => setHoveredNavId(item.id)}
                 onFocus={() => setHoveredNavId(item.id)}
                 aria-current={isActive ? "page" : undefined}
-                className="siga-glass-inner relative z-10 flex items-center justify-between rounded-2xl border p-2 text-[13px] font-semibold text-foreground transition-transform hover:scale-[1.01] focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none"
+                className={cn(
+                  "relative z-10 flex items-center justify-between rounded-2xl border p-2 text-[13px] transition-transform hover:scale-[1.01] focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none",
+                  isActive
+                    ? "siga-glass-inner font-semibold text-foreground"
+                    : "border-transparent font-medium text-muted-foreground hover:text-foreground"
+                )}
               >
                 {isHovered ? (
                   <motion.span
@@ -548,7 +575,14 @@ export function DashboardSidebar({
                   />
                 ) : null}
                 <span className="flex min-w-0 items-center gap-2.5">
-                  <span className="siga-active-icon-glow flex size-7.5 shrink-0 items-center justify-center rounded-xl">
+                  <span
+                    className={cn(
+                      "flex size-7.5 shrink-0 items-center justify-center rounded-xl transition-colors",
+                      isActive
+                        ? "siga-active-icon-glow"
+                        : "siga-glass-inner border text-muted-foreground"
+                    )}
+                  >
                     <Icon className="size-3.5" aria-hidden="true" />
                   </span>
                   <span className="truncate">{item.label}</span>
@@ -564,11 +598,17 @@ export function DashboardSidebar({
               <Link
                 key={item.id}
                 href={item.href}
+                prefetch={true}
                 onClick={onNavigate}
                 aria-current={isActive ? "page" : undefined}
                 aria-label={item.label}
                 title={item.label}
-                className="siga-active-icon-glow mx-auto flex size-10.5 items-center justify-center rounded-2xl transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:outline-none"
+                className={cn(
+                  "mx-auto flex size-10.5 items-center justify-center rounded-2xl transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:outline-none",
+                  isActive
+                    ? "siga-active-icon-glow"
+                    : "siga-glass-inner border text-muted-foreground hover:text-foreground"
+                )}
               >
                 <Icon className="size-4.5" strokeWidth={2} aria-hidden="true" />
               </Link>
@@ -577,9 +617,64 @@ export function DashboardSidebar({
         </nav>
       </div>
 
-      {/* ==================== BLOQUE INFERIOR: PRISMA DE SECCIÓN + OPCIONES DEL SISTEMA ==================== */}
+      {/* ==================== BLOQUE INFERIOR: PORTAL AULA VIRTUAL / PRISMA + OPCIONES DEL SISTEMA ==================== */}
       <div className="relative z-10 flex flex-col gap-3">
-        {expanded ? (
+        {canAccessAulaVirtual ? (
+          expanded ? (
+            <Link
+              href={crystalPortalHref}
+              prefetch={true}
+              onClick={onNavigate}
+              className="group relative flex items-center justify-between gap-2 overflow-hidden rounded-2xl border border-sky-300/35 bg-gradient-to-br from-[#0b1739]/95 via-[#0f255e]/90 to-[#050b1f]/95 p-3 text-white shadow-lg transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-300/65 hover:shadow-sky-500/20 focus-visible:ring-2 focus-visible:ring-sky-300 focus-visible:outline-none"
+            >
+              <div className="min-w-0">
+                <span className="inline-flex items-center gap-1.5 text-[9.5px] font-semibold tracking-[0.16em] text-sky-300/95 uppercase">
+                  <span
+                    aria-hidden="true"
+                    className="size-1.5 rounded-full bg-sky-300 shadow-[0_0_8px_#38bdf8]"
+                  />
+                  {isInsideAulaVirtual ? "Aula Virtual Activa" : "Campus Digital"}
+                </span>
+                <p className="mt-1 truncate text-xs font-bold tracking-[0.03em] text-white group-hover:text-sky-100">
+                  {isInsideAulaVirtual
+                    ? "Volver a mi Panel"
+                    : "Entrar a Aula Virtual"}
+                </p>
+                <p className="mt-0.5 truncate text-[10.5px] text-sky-100/75">
+                  {isInsideAulaVirtual
+                    ? `Inicio · ${ROLE_LABELS[profile.primaryRole]}`
+                    : 'E.T.C. "Andrés Bello"'}
+                </p>
+              </div>
+              <PrismaticCrystalGem
+                uid={rawUid}
+                className="size-12 shrink-0 transition-transform duration-300 group-hover:scale-110"
+              />
+            </Link>
+          ) : (
+            <Link
+              href={crystalPortalHref}
+              prefetch={true}
+              onClick={onNavigate}
+              aria-label={
+                isInsideAulaVirtual
+                  ? "Volver a mi Panel"
+                  : "Entrar a Aula Virtual"
+              }
+              title={
+                isInsideAulaVirtual
+                  ? "Volver a mi Panel"
+                  : "Entrar a Aula Virtual"
+              }
+              className="group mx-auto flex w-11 flex-col items-center justify-center rounded-2xl border border-sky-300/35 bg-gradient-to-b from-[#0f255e]/90 to-[#050b1f]/95 py-2.5 shadow-md transition-all hover:scale-105 hover:border-sky-300/70 focus-visible:ring-2 focus-visible:ring-sky-300 focus-visible:outline-none"
+            >
+              <PrismaticCrystalGem
+                uid={rawUid}
+                className="size-8 transition-transform duration-300 group-hover:scale-110"
+              />
+            </Link>
+          )
+        ) : expanded ? (
           <div className="relative flex items-center justify-between gap-2 overflow-hidden rounded-2xl border border-white/30 bg-gradient-to-br from-[#0b1739]/90 via-[#0f2356]/85 to-[#060d24]/95 p-3 text-white shadow-lg">
             <div className="min-w-0">
               <span className="block text-[9.5px] font-semibold tracking-[0.16em] text-sky-300/90 uppercase">

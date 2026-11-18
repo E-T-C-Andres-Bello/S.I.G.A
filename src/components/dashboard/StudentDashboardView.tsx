@@ -1,29 +1,61 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import {
   ArrowUpRight,
   Award,
   BookOpen,
+  Calculator,
   Calendar,
+  CalendarClock,
   CheckCircle2,
   ClipboardList,
   Clock,
+  FileText,
   GraduationCap,
+  QrCode,
 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "cn";
+import { StudentGradeSimulator } from "@/components/estudiante/StudentGradeSimulator";
+import { StudentMedalsStrip } from "@/components/estudiante/StudentMedalsStrip";
+import { StudentSchedulePanel } from "@/components/estudiante/StudentSchedulePanel";
+import { StudentTramitesView } from "@/components/estudiante/StudentTramitesView";
+import { StudentCarnetView } from "@/components/qr/StudentCarnetView";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { StudentDashboardData } from "@/features/estudiante/dashboard-data";
+import type { StudentCarnetTokenPayload } from "@/features/estudiante/student-actions";
+import type { StudentTramitesData } from "@/features/estudiante/tramites-data";
 import type { DashboardUserProfile } from "@/lib/supabase/dashboard-session";
 import { CountUp, SigaAnalyticsBento } from "./SigaAnalyticsBento";
+
+export type StudentPortalTab =
+  | "resumen"
+  | "horario"
+  | "simulador"
+  | "carnet"
+  | "tramites";
 
 export interface StudentDashboardViewProps {
   profile: DashboardUserProfile;
   data: StudentDashboardData;
+  tramitesData: StudentTramitesData;
+  initialCarnetToken?: StudentCarnetTokenPayload | null;
+  initialCarnetError?: string | null;
   /** Fecha actual ISO (`YYYY-MM-DD`) en zona America/Caracas calculada en servidor. */
   todayIso: string;
   /** Saludo contextual ("Buenos días" | "Buenas tardes" | "Buenas noches"). */
   greeting?: string;
+  /** Pestaña inicial (`resumen` | `horario` | `simulador` | `carnet` | `tramites`). */
+  initialTab?: StudentPortalTab;
+  /** Indica si el alumno acaba de vincular su Google Workspace `@etcandresbello.org`. */
+  justLinkedWorkspace?: boolean;
+  /** Preselección opcional de tipo de trámite al llegar desde una asignatura. */
+  initialRequestType?: "constancia_estudio" | "constancia_inscripcion" | "solvencia" | "revision_notas";
+  /** Motivo inicial opcional para trámites de revisión de calificación. */
+  initialRequestReason?: string;
 }
 
 const WEEKDAY_SINGLE_LETTERS = ["L", "M", "M", "J", "V", "S", "D"];
@@ -173,9 +205,81 @@ function MiniSubjectWaffle({
 export function StudentDashboardView({
   profile,
   data,
+  tramitesData,
+  initialCarnetToken = null,
+  initialCarnetError = null,
   todayIso,
   greeting = "Bienvenido",
+  initialTab = "resumen",
+  justLinkedWorkspace = false,
+  initialRequestType,
+  initialRequestReason,
 }: StudentDashboardViewProps) {
+  const router = useRouter();
+  const [activeTab, setActiveTab] =
+    React.useState<StudentPortalTab>(initialTab);
+
+  React.useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+  const [carnetToken, setCarnetToken] =
+    React.useState<StudentCarnetTokenPayload | null>(initialCarnetToken);
+  const [carnetDeadlineMs, setCarnetDeadlineMs] = React.useState<number | null>(
+    () => {
+      if (!initialCarnetToken) return null;
+      const issuedMs = Date.parse(initialCarnetToken.issuedAt);
+      const expiresMs = Date.parse(initialCarnetToken.expiresAt);
+      const durationMs =
+        Number.isFinite(issuedMs) &&
+        Number.isFinite(expiresMs) &&
+        expiresMs > issuedMs
+          ? expiresMs - issuedMs
+          : Math.max(30, initialCarnetToken.ttlSeconds || 120) * 1000;
+      return Date.now() + durationMs;
+    }
+  );
+
+  // Si cambia la matrícula desde el selector QA (año/mención/sección), invalida el token cacheado en memoria
+  const enrollmentFingerprint = `${data.schoolYearName ?? ""}|${data.mencionName ?? ""}|${data.gradeYear ?? ""}|${data.sectionLetter ?? ""}`;
+  const prevEnrollmentFingerprintRef = React.useRef(enrollmentFingerprint);
+  React.useEffect(() => {
+    if (prevEnrollmentFingerprintRef.current === enrollmentFingerprint) return;
+    prevEnrollmentFingerprintRef.current = enrollmentFingerprint;
+    setCarnetToken(null);
+    setCarnetDeadlineMs(null);
+  }, [enrollmentFingerprint]);
+
+  const handleCarnetTokenIssued = React.useCallback(
+    (payload: StudentCarnetTokenPayload, nextDeadlineMs: number) => {
+      setCarnetToken(payload);
+      setCarnetDeadlineMs(nextDeadlineMs);
+    },
+    []
+  );
+
+  const handleTabChange = React.useCallback((nextValue: string) => {
+    const nextTab = nextValue as StudentPortalTab;
+    setActiveTab(nextTab);
+    try {
+      const nextUrl = new URL(window.location.href);
+      if (nextTab === "resumen") {
+        nextUrl.searchParams.delete("tab");
+      } else {
+        nextUrl.searchParams.set("tab", nextTab);
+      }
+      window.history.replaceState(null, "", nextUrl.toString());
+    } catch {
+      // Ignorar si history API está restringida.
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (justLinkedWorkspace) {
+      toast.success(
+        "Cuenta @etcandresbello.org vinculada. Portal estudiantil desbloqueado."
+      );
+    }
+  }, [justLinkedWorkspace]);
   const [y, m, d] = todayIso.split("-").map(Number);
   const todayDate = new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1));
   const todayDayNum = String(todayDate.getUTCDate()).padStart(2, "0");
@@ -277,6 +381,8 @@ export function StudentDashboardView({
       series: numericGradeSeries,
       sparkClass: "text-primary dark:text-[#7dd3fc]",
       kind: "sparkline" as const,
+      actionLabel: "Ir al simulador de notas",
+      onAction: () => handleTabChange("simulador"),
     },
     {
       title: "Asistencia",
@@ -304,6 +410,8 @@ export function StudentDashboardView({
           : ([] as number[]),
       sparkClass: "text-emerald-600 dark:text-emerald-400",
       kind: "sparkline" as const,
+      actionLabel: "Ver horario escolar",
+      onAction: () => handleTabChange("horario"),
     },
     {
       title: "Asignaturas",
@@ -324,6 +432,8 @@ export function StudentDashboardView({
       series: numericGradeSeries,
       sparkClass: "text-sky-200",
       kind: "waffle" as const,
+      actionLabel: "Abrir asignaturas y pensum",
+      onAction: () => router.push("/estudiante/asignaturas"),
     },
     {
       title: "En gestión",
@@ -339,6 +449,8 @@ export function StudentDashboardView({
       series: [] as number[],
       sparkClass: "text-primary dark:text-[#7dd3fc]",
       kind: "sparkline" as const,
+      actionLabel: "Abrir trámites y constancias",
+      onAction: () => handleTabChange("tramites"),
     },
   ];
 
@@ -370,6 +482,51 @@ export function StudentDashboardView({
           </span>
         </span>
       </motion.div>
+
+      <Tabs
+        value={activeTab}
+        onValueChange={handleTabChange}
+        className="flex flex-col gap-5"
+      >
+        <TabsList className="siga-glass-surface h-auto w-full justify-start gap-1 overflow-x-auto rounded-2xl border p-1 sm:w-fit">
+          <TabsTrigger
+            value="resumen"
+            className="cursor-pointer rounded-xl px-3.5 py-2 text-xs font-medium"
+          >
+            <Award data-icon="inline-start" aria-hidden="true" />
+            Resumen y Analítica
+          </TabsTrigger>
+          <TabsTrigger
+            value="horario"
+            className="cursor-pointer rounded-xl px-3.5 py-2 text-xs font-medium"
+          >
+            <CalendarClock data-icon="inline-start" aria-hidden="true" />
+            Horario Escolar
+          </TabsTrigger>
+          <TabsTrigger
+            value="simulador"
+            className="cursor-pointer rounded-xl px-3.5 py-2 text-xs font-medium"
+          >
+            <Calculator data-icon="inline-start" aria-hidden="true" />
+            Simulador de Notas
+          </TabsTrigger>
+          <TabsTrigger
+            value="carnet"
+            className="cursor-pointer rounded-xl px-3.5 py-2 text-xs font-medium"
+          >
+            <QrCode data-icon="inline-start" aria-hidden="true" />
+            Carnet QR
+          </TabsTrigger>
+          <TabsTrigger
+            value="tramites"
+            className="cursor-pointer rounded-xl px-3.5 py-2 text-xs font-medium"
+          >
+            <FileText data-icon="inline-start" aria-hidden="true" />
+            Trámites
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="resumen" className="flex flex-col gap-5">
 
       {/* Fila 1 — Hero Card (8 cols) + Agenda Semanal Interactiva (4 cols) */}
       <div className="air-3d-perspective grid grid-cols-1 items-stretch gap-5 lg:grid-cols-12">
@@ -693,8 +850,11 @@ export function StudentDashboardView({
         {statCards.map((card, index) => {
           const Icon = card.icon;
           return (
-            <motion.div
+            <motion.button
               key={card.title}
+              type="button"
+              onClick={card.onAction}
+              aria-label={`${card.title}: ${card.actionLabel}`}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{
@@ -704,7 +864,7 @@ export function StudentDashboardView({
               }}
               whileHover={{ y: -3 }}
               className={cn(
-                "flex flex-col justify-between rounded-[24px] border p-5 transition-shadow",
+                "flex cursor-pointer flex-col justify-between rounded-[24px] border p-5 text-left transition-shadow focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none",
                 card.highlighted
                   ? "siga-glass-hero text-white"
                   : "siga-glass-surface text-foreground"
@@ -786,13 +946,66 @@ export function StudentDashboardView({
                   />
                 )}
               </div>
-            </motion.div>
+            </motion.button>
           );
         })}
       </section>
 
-      {/* Fila 3 — Bloque AnalyticsBento (Curva MPPE, Ondas, Treemap y Radar) */}
-      <SigaAnalyticsBento data={data} />
+      {/* Fila 3 — Medallas de Desempeño y Puntualidad */}
+      <StudentMedalsStrip medals={data.medals} />
+
+      {/* Fila 4 — Bloque AnalyticsBento limpio para Dashboard (Curva MPPE y Ondas de Asistencia) */}
+      <SigaAnalyticsBento
+        key={`${enrollmentFingerprint}|${data.activeMomentNumber ?? ""}`}
+        data={data}
+        variant="overview"
+      />
+        </TabsContent>
+
+        <TabsContent value="horario">
+          <StudentSchedulePanel
+            scheduleBlocks={data.scheduleBlocks}
+            todayIso={todayIso}
+            sectionLabel={enrollmentSubtitle}
+          />
+        </TabsContent>
+
+        <TabsContent value="simulador">
+          <StudentGradeSimulator
+            key={`${enrollmentFingerprint}|${data.activeMomentName ?? ""}`}
+            simulatorSubjects={data.simulatorSubjects}
+            pendingSubjects={data.pendingSubjects}
+            activeMomentName={data.activeMomentName}
+          />
+        </TabsContent>
+
+        <TabsContent value="carnet">
+          <StudentCarnetView
+            key={enrollmentFingerprint}
+            profile={profile}
+            initialToken={
+              carnetToken &&
+              (!carnetDeadlineMs || carnetDeadlineMs > Date.now() + 5000)
+                ? carnetToken
+                : null
+            }
+            initialDeadlineMs={carnetDeadlineMs}
+            initialError={initialCarnetError}
+            onTokenIssued={handleCarnetTokenIssued}
+            embedded
+          />
+        </TabsContent>
+
+        <TabsContent value="tramites">
+          <StudentTramitesView
+            profile={profile}
+            initialData={tramitesData}
+            embedded
+            initialRequestType={initialRequestType}
+            initialRequestReason={initialRequestReason}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

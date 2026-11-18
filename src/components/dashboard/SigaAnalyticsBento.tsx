@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
 import { cn } from "cn";
 import type {
   StudentDashboardData,
@@ -815,7 +817,7 @@ function CurriculumTreemap({
             </div>
             {!tiny && (
               <div className="flex items-end justify-between gap-1.5">
-                <span className="font-kpi-num text-2xl leading-none font-light tracking-[-0.04em] sm:text-[26px]">
+                <span className="font-kpi-num text-2xl leading-none font-light tracking-normal sm:text-[26px]">
                   <CountUp value={r.displayValue} duration={850} />
                 </span>
                 <span className="rounded-md bg-black/45 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white backdrop-blur-xs">
@@ -1053,11 +1055,20 @@ function AcademicRadar({
 
 export interface SigaAnalyticsBentoProps {
   data: StudentDashboardData;
+  /** `overview`: solo Curva MPPE + Ondas (Dashboard); `curriculum`: solo Mapa Treemap + Balance Radar (Asignaturas y Pensum). */
+  variant?: "overview" | "curriculum" | "all";
 }
 
-export function SigaAnalyticsBento({ data }: SigaAnalyticsBentoProps) {
+export function SigaAnalyticsBento({
+  data,
+  variant = "all",
+}: SigaAnalyticsBentoProps) {
   const tip = React.useRef<TipApi | null>(null);
-  const [periodIdx, setPeriodIdx] = React.useState(0);
+  const [periodIdx, setPeriodIdx] = React.useState(() =>
+    data.activeMomentNumber && data.activeMomentNumber >= 1 && data.activeMomentNumber <= 3
+      ? data.activeMomentNumber - 1
+      : 0
+  );
   const [radarMode, setRadarMode] = React.useState(0);
 
   const hasSubjects = data.subjectsSummary.length > 0;
@@ -1136,43 +1147,45 @@ export function SigaAnalyticsBento({ data }: SigaAnalyticsBentoProps) {
 
   /* 3. Datos para el Treemap Curricular */
   const periodTabs = React.useMemo(
-    () => [
-      {
-        label: "1.º Momento",
-        total:
-          data.activeMomentNumber === 1 || !data.activeMomentNumber
-            ? data.enrolledSubjectsCount
-            : 0,
-        status:
-          data.activeMomentNumber === 1
+    () =>
+      [1, 2, 3].map((num) => {
+        const momentMeta = data.momentos.find((m) => m.momentNumber === num);
+        const list = data.momentGradesByNumber[num] ?? (num === (data.activeMomentNumber ?? 1) ? data.subjectsSummary : []);
+        const gradedCount = list.filter(
+          (s) => s.finalNumeric !== null || s.finalLiteral !== null
+        ).length;
+        const statusText =
+          momentMeta?.status === "open"
             ? "Lapso activo"
-            : data.enrolledSubjectsCount > 0
-              ? "Registrado"
-              : "Por abrir",
-        compare:
-          gradedList.length > 0
-            ? `${gradedList.length} calificada(s)`
-            : "0 evaluadas aún",
-      },
-      {
-        label: "2.º Momento",
-        total: data.activeMomentNumber === 2 ? data.enrolledSubjectsCount : 0,
-        status: data.activeMomentNumber === 2 ? "Lapso activo" : "Programado",
-        compare: "Calendario MPPE",
-      },
-      {
-        label: "3.º Momento",
-        total: data.activeMomentNumber === 3 ? data.enrolledSubjectsCount : 0,
-        status: data.activeMomentNumber === 3 ? "Lapso activo" : "Programado",
-        compare: "Cierre anual",
-      },
-    ],
-    [data.activeMomentNumber, data.enrolledSubjectsCount, gradedList.length]
+            : momentMeta?.status === "closed" || momentMeta?.status === "locked"
+              ? "Cerrado"
+              : "Programado";
+        return {
+          momentNumber: num,
+          label: `${num}.º Momento`,
+          total: list.length,
+          status: statusText,
+          compare:
+            gradedCount > 0
+              ? `${gradedCount} calificada(s)`
+              : statusText === "Lapso activo"
+                ? "0 evaluadas aún"
+                : statusText,
+        };
+      }),
+    [data.activeMomentNumber, data.momentGradesByNumber, data.momentos, data.subjectsSummary]
+  );
+
+  const selectedPeriodSubjects = React.useMemo(
+    () =>
+      data.momentGradesByNumber[periodIdx + 1] ??
+      (periodIdx + 1 === (data.activeMomentNumber ?? 1) ? data.subjectsSummary : []),
+    [data.activeMomentNumber, data.momentGradesByNumber, data.subjectsSummary, periodIdx]
   );
 
   const treemapItems = React.useMemo<TreemapInputItem[]>(() => {
-    if (hasSubjects) {
-      return data.subjectsSummary.map((s) => {
+    if (selectedPeriodSubjects.length > 0) {
+      return selectedPeriodSubjects.map((s) => {
         const score = s.finalNumeric ?? 0;
         const group =
           s.finalNumeric === null && s.finalLiteral === null
@@ -1233,7 +1246,7 @@ export function SigaAnalyticsBento({ data }: SigaAnalyticsBentoProps) {
         statusText: "Por asignar",
       },
     ];
-  }, [data.subjectsSummary, hasSubjects]);
+  }, [selectedPeriodSubjects]);
 
   /* 4. Datos para el Radar Académico */
   const radarData = React.useMemo(() => {
@@ -1277,14 +1290,19 @@ export function SigaAnalyticsBento({ data }: SigaAnalyticsBentoProps) {
     radarMode,
   ]);
 
+  const showOverview = variant !== "curriculum";
+  const showCurriculum = variant !== "overview";
+
   return (
     <div id="asignaturas" className="font-hero w-full text-foreground">
       <div className="grid grid-cols-12 gap-5">
-        {/* TARJETA A: Curva de Rendimiento MPPE */}
-        <section
-          aria-label="Curva de rendimiento académico"
-          className="siga-glass-surface col-span-12 flex flex-col rounded-[28px] border p-5 sm:p-6 lg:col-span-5"
-        >
+        {showOverview ? (
+          <>
+            {/* TARJETA A: Curva de Rendimiento MPPE */}
+            <section
+              aria-label="Curva de rendimiento académico"
+              className="siga-glass-surface col-span-12 flex flex-col rounded-[28px] border p-5 sm:p-6 lg:col-span-5"
+            >
           <div className="flex flex-1 flex-col gap-5 sm:flex-row">
             <div className="shrink-0 sm:w-48">
               <div className="text-xs leading-snug font-medium tracking-[-0.01em] text-muted-foreground">
@@ -1417,18 +1435,22 @@ export function SigaAnalyticsBento({ data }: SigaAnalyticsBentoProps) {
             />
           </div>
         </section>
+          </>
+        ) : null}
 
-        {/* TARJETA C: Mapa Curricular y Asignaturas del Período (Treemap + Tabla) */}
-        <section
-          aria-label="Mapa curricular y asignaturas del período"
-          className="siga-glass-surface col-span-12 rounded-[28px] border p-5 sm:p-6 lg:col-span-7"
-        >
-          <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-            <div>
-              <h2 className="m-0 text-base leading-snug font-semibold tracking-[-0.02em] text-foreground">
-                Mapa Curricular y Asignaturas
-              </h2>
-              <p className="mt-1 text-xs leading-[1.5] text-muted-foreground">
+        {showCurriculum ? (
+          <>
+            {/* TARJETA C: Mapa Curricular y Asignaturas del Período (Treemap + Tabla) */}
+            <section
+              aria-label="Mapa curricular y asignaturas del período"
+              className="siga-glass-surface col-span-12 rounded-[28px] border p-5 sm:p-6 lg:col-span-7"
+            >
+              <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+                <div>
+                  <h2 className="m-0 text-base leading-snug font-semibold tracking-[-0.02em] text-foreground">
+                    Mapa Curricular y Asignaturas
+                  </h2>
+                  <p className="mt-1 text-xs leading-[1.5] text-muted-foreground">
                 {hasSubjects
                   ? `Pensum activo · ${data.subjectsSummary.length} materia(s) inscrita(s)`
                   : "Distribución estructural E.T.C. (en espera de carga de malla)"}
@@ -1504,14 +1526,23 @@ export function SigaAnalyticsBento({ data }: SigaAnalyticsBentoProps) {
                 </tr>
               </thead>
               <tbody>
-                {hasSubjects ? (
-                  data.subjectsSummary.map((s) => (
+                {selectedPeriodSubjects.length > 0 ? (
+                  selectedPeriodSubjects.map((s) => (
                     <tr
                       key={s.curriculumSubjectId}
                       className="border-b border-border/50 last:border-0"
                     >
                       <td className="py-2.5 text-left font-medium text-foreground">
-                        {s.subjectName}
+                        <Link
+                          href={`/estudiante/asignaturas/${encodeURIComponent(s.subjectCode)}`}
+                          className="inline-flex items-center gap-1 hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none dark:hover:text-sky-300"
+                        >
+                          <span>{s.subjectName}</span>
+                          <ArrowUpRight
+                            className="size-3 opacity-65"
+                            aria-hidden="true"
+                          />
+                        </Link>
                       </td>
                       <td className="py-2.5 text-right tabular-nums text-muted-foreground">
                         {s.subjectCode}
@@ -1631,6 +1662,8 @@ export function SigaAnalyticsBento({ data }: SigaAnalyticsBentoProps) {
             </div>
           </div>
         </section>
+          </>
+        ) : null}
       </div>
 
       <BentoTooltip api={tip} />
