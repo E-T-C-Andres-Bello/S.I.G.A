@@ -1,0 +1,53 @@
+name: Supabase & Neon Keep-Alive (Cada 3 Días)
+
+on:
+  schedule:
+    # Se ejecuta cada 3 días a las 09:00 UTC (05:00 VET) para evitar pausa por inactividad
+    - cron: "0 9 */3 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: siga-db-keepalive
+  cancel-in-progress: false
+
+jobs:
+  keepalive-ping:
+    name: Ejecutar consulta ligera de actividad en Supabase y Neon
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Instalar cliente PostgreSQL 17
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y postgresql-client
+
+      - name: Keep-Alive sobre Supabase REST / DB
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -n "$SUPABASE_DB_URL" ]; then
+            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "SELECT now() AS keepalive_at, count(*) AS total_roles FROM public.roles;"
+          elif [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_ANON_KEY" ]; then
+            curl --fail --silent --show-error \
+              -H "apikey: $SUPABASE_ANON_KEY" \
+              -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+              "${SUPABASE_URL%/}/rest/v1/menciones?select=id&limit=1" > /dev/null
+            echo "Keep-alive REST completado correctamente."
+          else
+            echo "Aviso: Configura SUPABASE_DB_URL o NEXT_PUBLIC_SUPABASE_URL en GitHub Secrets."
+          fi
+
+      - name: Keep-Alive sobre Neon Backup DB
+        env:
+          NEON_BACKUP_DATABASE_URL: ${{ secrets.NEON_BACKUP_DATABASE_URL }}
+        run: |
+          if [ -n "$NEON_BACKUP_DATABASE_URL" ]; then
+            psql "$NEON_BACKUP_DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT now() AS neon_keepalive_at;"
+          else
+            echo "Aviso: NEON_BACKUP_DATABASE_URL aún no configurado en GitHub Secrets."
+          fi

@@ -1,0 +1,57 @@
+name: Respaldo Nocturno Supabase hacia Neon
+
+on:
+  schedule:
+    # Se ejecuta cada noche a las 04:00 UTC (00:00 hora de Venezuela)
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: siga-nightly-db-backup
+  cancel-in-progress: false
+
+jobs:
+  clone-supabase-to-neon:
+    name: Clonar esquema y datos de producción (Supabase -> Neon)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Instalar herramientas PostgreSQL 17
+        run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+          sudo apt-get update -y
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Ejecutar volcado lógico y sincronización en Neon
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          NEON_BACKUP_DATABASE_URL: ${{ secrets.NEON_BACKUP_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SUPABASE_DB_URL" ] || [ -z "$NEON_BACKUP_DATABASE_URL" ]; then
+            echo "Omitido: Configura SUPABASE_DB_URL y NEON_BACKUP_DATABASE_URL en GitHub Actions Secrets."
+            exit 0
+          fi
+
+          pg_dump "$SUPABASE_DB_URL" \
+            --format=custom \
+            --no-owner \
+            --no-privileges \
+            --schema=public \
+            --schema=siga_internal \
+            --file=/tmp/siga_nightly.dump
+
+          pg_restore \
+            --dbname="$NEON_BACKUP_DATABASE_URL" \
+            --clean \
+            --if-exists \
+            --no-owner \
+            --no-privileges \
+            /tmp/siga_nightly.dump
+
+          rm -f /tmp/siga_nightly.dump
+          echo "Respaldo nocturno Supabase -> Neon finalizado con éxito."

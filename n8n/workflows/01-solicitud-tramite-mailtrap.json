@@ -1,0 +1,338 @@
+{
+  "name": "S.I.G.A. — Automatización 01: Solicitud de Trámite -> Mailtrap",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "siga-tramite-mailtrap",
+        "authentication": "none",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Webhook (Trámite S.I.G.A.)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        300
+      ],
+      "webhookId": "siga-tramite-mailtrap",
+      "notes": "Modo desarrollo: authentication = 'none'. Para producción, cambia a Header Auth (x-siga-n8n-secret) y define N8N_WEBHOOK_SECRET en Supabase."
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json ?? {};\nconst payload = raw.body && typeof raw.body === 'object' ? raw.body : raw;\n\nconst emails = payload.emails && typeof payload.emails === 'object' ? payload.emails : {};\nconst studentReceipt = emails.student_receipt && typeof emails.student_receipt === 'object' ? emails.student_receipt : null;\nconst staffAlert = emails.staff_alert && typeof emails.staff_alert === 'object' ? emails.staff_alert : null;\n\nconst studentToList = Array.isArray(studentReceipt?.to) ? studentReceipt.to.map((r) => r?.email).filter(Boolean) : [];\nconst staffToList = Array.isArray(staffAlert?.to) ? staffAlert.to.map((r) => r?.email).filter(Boolean) : [];\n\nconst hasStudentReceipt = studentToList.length > 0;\nconst hasStaffAlert = staffToList.length > 0;\nconst isValid = Boolean(payload.record_id && (hasStudentReceipt || hasStaffAlert));\n\nreturn [\n  {\n    json: {\n      is_valid: isValid,\n      workflow_code: payload.workflow_code ?? 'student_request_mailtrap',\n      workflow_run_id: payload.workflow_run_id ?? null,\n      record_id: payload.record_id ?? null,\n      reference_code: payload.reference_code ?? null,\n      has_student_receipt: hasStudentReceipt,\n      has_staff_alert: hasStaffAlert,\n      student_to_email: studentToList[0] ?? '',\n      student_subject: studentReceipt?.subject ?? '',\n      student_html: studentReceipt?.html ?? '',\n      student_text: studentReceipt?.text ?? '',\n      student_category: studentReceipt?.category ?? 'siga-tramites-acuse',\n      staff_to_emails: staffToList.join(','),\n      staff_to_first_email: staffToList[0] ?? '',\n      staff_subject: staffAlert?.subject ?? '',\n      staff_html: staffAlert?.html ?? '',\n      staff_text: staffAlert?.text ?? '',\n      staff_category: staffAlert?.category ?? 'siga-tramites-secretaria',\n      student_receipt: hasStudentReceipt ? studentReceipt : null,\n      staff_alert: hasStaffAlert ? staffAlert : null,\n    },\n  },\n];"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000002",
+      "name": "Extraer Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-payload-valid",
+              "leftValue": "={{ $json.is_valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000003",
+      "name": "¿Payload Válido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, error: \"Payload de solicitud inválido o sin destinatarios configurados.\" }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000004",
+      "name": "Responder 400 (Inválido)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        920,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-student-receipt",
+              "leftValue": "={{ $('Extraer Payload').first().json.has_student_receipt }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000005",
+      "name": "¿Enviar Acuse a Estudiante?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        920,
+        240
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "a1b2c3d4-0001-4000-8000-000000000006",
+      "name": "Nodo Mailtrap Estudiante (Colocar aquí)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1180,
+        140
+      ],
+      "notes": "Reemplaza este nodo vacío por tu nodo nativo de Mailtrap (Send an email).\nCampos disponibles desde 'Extraer Payload':\n- To: {{ $('Extraer Payload').first().json.student_to_email }}\n- Subject: {{ $('Extraer Payload').first().json.student_subject }}\n- HTML: {{ $('Extraer Payload').first().json.student_html }}\n- Text: {{ $('Extraer Payload').first().json.student_text }}\n- Category: {{ $('Extraer Payload').first().json.student_category }}"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-staff-alert",
+              "leftValue": "={{ $('Extraer Payload').first().json.has_staff_alert }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000007",
+      "name": "¿Enviar Alerta a Secretaría?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1440,
+        240
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "a1b2c3d4-0001-4000-8000-000000000008",
+      "name": "Nodo Mailtrap Secretaría (Colocar aquí)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1700,
+        140
+      ],
+      "notes": "Reemplaza este nodo vacío por tu nodo nativo de Mailtrap (Send an email).\nCampos disponibles desde 'Extraer Payload':\n- To: {{ $('Extraer Payload').first().json.staff_to_emails }}\n- Subject: {{ $('Extraer Payload').first().json.staff_subject }}\n- HTML: {{ $('Extraer Payload').first().json.staff_html }}\n- Text: {{ $('Extraer Payload').first().json.staff_text }}\n- Category: {{ $('Extraer Payload').first().json.staff_category }}"
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $('Extraer Payload').first().json;\n\nfunction parseMailtrapResult(res, label) {\n  if (!res || typeof res !== 'object') {\n    return { sent: false, ids: [], error: `Sin respuesta del nodo Mailtrap (${label})` };\n  }\n\n  const isUntouchedNoOp =\n    res.is_valid === true &&\n    res.workflow_code === 'student_request_mailtrap' &&\n    typeof res.has_student_receipt === 'boolean' &&\n    res.success === undefined &&\n    res.message_ids === undefined &&\n    res.messageId === undefined &&\n    res.id === undefined;\n\n  if (isUntouchedNoOp) {\n    return {\n      sent: false,\n      ids: [],\n      error: `Falta reemplazar el nodo vacío de Mailtrap (${label})`,\n    };\n  }\n\n  if (res.error || res.errors || res.success === false) {\n    const msg =\n      (typeof res.error === 'string' ? res.error : res.error?.message) ||\n      (Array.isArray(res.errors) ? res.errors.join(', ') : null) ||\n      `El nodo Mailtrap (${label}) devolvió un error`;\n    return { sent: false, ids: [], error: msg };\n  }\n\n  const ids = Array.isArray(res.message_ids)\n    ? res.message_ids.map(String)\n    : res.messageId\n      ? [String(res.messageId)]\n      : res.id\n        ? [String(res.id)]\n        : [];\n\n  return { sent: true, ids, error: null };\n}\n\nlet studentSent = false;\nlet studentMessageId = null;\nlet studentError = null;\n\nif (ctx.has_student_receipt) {\n  try {\n    const studentOut = $('¿Enviar Alerta a Secretaría?').first()?.json ?? {};\n    const parsed = parseMailtrapResult(studentOut, 'estudiante');\n    studentSent = parsed.sent;\n    studentMessageId = parsed.ids[0] ?? null;\n    studentError = parsed.error;\n  } catch (err) {\n    studentError = err instanceof Error ? err.message : 'Error leyendo salida Mailtrap (estudiante)';\n  }\n}\n\nlet staffSent = false;\nlet staffMessageIds = [];\nlet staffError = null;\n\nif (ctx.has_staff_alert) {\n  try {\n    const staffOut = $input.first()?.json ?? {};\n    const parsed = parseMailtrapResult(staffOut, 'secretaría');\n    staffSent = parsed.sent;\n    staffMessageIds = parsed.ids;\n    staffError = parsed.error;\n  } catch (err) {\n    staffError = err instanceof Error ? err.message : 'Error leyendo salida Mailtrap (secretaría)';\n  }\n}\n\nconst ok = (!ctx.has_student_receipt || studentSent) && (!ctx.has_staff_alert || staffSent);\nconst errorMessage = [studentError, staffError].filter(Boolean).join(' | ');\n\nreturn [\n  {\n    json: {\n      ok,\n      workflow_run_id: ctx.workflow_run_id,\n      record_id: ctx.record_id,\n      reference_code: ctx.reference_code,\n      student_sent: studentSent,\n      student_message_id: studentMessageId,\n      staff_sent: staffSent,\n      staff_message_ids: staffMessageIds,\n      ...(ok ? {} : { error: errorMessage || 'Fallo al despachar correo por Mailtrap' }),\n    },\n  },\n];"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000009",
+      "name": "Consolidar Resultado Mailtrap",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1960,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": "={{ $json.ok ? 200 : 502 }}"
+        }
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000010",
+      "name": "Responder a Edge Function",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2220,
+        240
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook (Trámite S.I.G.A.)": {
+      "main": [
+        [
+          {
+            "node": "Extraer Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Payload": {
+      "main": [
+        [
+          {
+            "node": "¿Payload Válido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Payload Válido?": {
+      "main": [
+        [
+          {
+            "node": "¿Enviar Acuse a Estudiante?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 400 (Inválido)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Enviar Acuse a Estudiante?": {
+      "main": [
+        [
+          {
+            "node": "Nodo Mailtrap Estudiante (Colocar aquí)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "¿Enviar Alerta a Secretaría?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nodo Mailtrap Estudiante (Colocar aquí)": {
+      "main": [
+        [
+          {
+            "node": "¿Enviar Alerta a Secretaría?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Enviar Alerta a Secretaría?": {
+      "main": [
+        [
+          {
+            "node": "Nodo Mailtrap Secretaría (Colocar aquí)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Consolidar Resultado Mailtrap",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nodo Mailtrap Secretaría (Colocar aquí)": {
+      "main": [
+        [
+          {
+            "node": "Consolidar Resultado Mailtrap",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consolidar Resultado Mailtrap": {
+      "main": [
+        [
+          {
+            "node": "Responder a Edge Function",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "01-solicitud-tramite-mailtrap-v3",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "S.I.G.A."
+    },
+    {
+      "name": "Mailtrap"
+    }
+  ]
+}

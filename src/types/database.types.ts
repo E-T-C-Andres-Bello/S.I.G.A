@@ -95,6 +95,7 @@ export type Database = {
         Row: {
           ai_pre_evaluation: Json | null
           assignment_id: string
+          content_sha256: string | null
           enrollment_id: string
           file_path: string | null
           id: string
@@ -106,6 +107,7 @@ export type Database = {
         Insert: {
           ai_pre_evaluation?: Json | null
           assignment_id: string
+          content_sha256?: string | null
           enrollment_id: string
           file_path?: string | null
           id?: string
@@ -117,6 +119,7 @@ export type Database = {
         Update: {
           ai_pre_evaluation?: Json | null
           assignment_id?: string
+          content_sha256?: string | null
           enrollment_id?: string
           file_path?: string | null
           id?: string
@@ -2134,6 +2137,76 @@ export type Database = {
         }
         Relationships: []
       }
+      section_schedules: {
+        Row: {
+          block_label: string
+          created_at: string
+          day_of_week: number
+          end_time: string
+          id: string
+          is_active: boolean
+          room_label: string
+          school_year_id: string
+          section_id: string
+          slot_range: unknown
+          start_time: string
+          teacher_assignment_id: string
+          updated_at: string
+        }
+        Insert: {
+          block_label: string
+          created_at?: string
+          day_of_week: number
+          end_time: string
+          id?: string
+          is_active?: boolean
+          room_label?: string
+          school_year_id: string
+          section_id: string
+          slot_range?: unknown
+          start_time: string
+          teacher_assignment_id: string
+          updated_at?: string
+        }
+        Update: {
+          block_label?: string
+          created_at?: string
+          day_of_week?: number
+          end_time?: string
+          id?: string
+          is_active?: boolean
+          room_label?: string
+          school_year_id?: string
+          section_id?: string
+          slot_range?: unknown
+          start_time?: string
+          teacher_assignment_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "section_schedules_school_year_id_fkey"
+            columns: ["school_year_id"]
+            isOneToOne: false
+            referencedRelation: "school_years"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "section_schedules_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "section_schedules_teacher_assignment_id_fkey"
+            columns: ["teacher_assignment_id"]
+            isOneToOne: false
+            referencedRelation: "teacher_assignments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sections: {
         Row: {
           capacity: number
@@ -2229,8 +2302,9 @@ export type Database = {
       }
       student_requests: {
         Row: {
+          client_request_id: string | null
           created_at: string
-          enrollment_id: string
+          enrollment_id: string | null
           id: string
           official_document_id: string | null
           reason: string | null
@@ -2243,8 +2317,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          client_request_id?: string | null
           created_at?: string
-          enrollment_id: string
+          enrollment_id?: string | null
           id?: string
           official_document_id?: string | null
           reason?: string | null
@@ -2257,8 +2332,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          client_request_id?: string | null
           created_at?: string
-          enrollment_id?: string
+          enrollment_id?: string | null
           id?: string
           official_document_id?: string | null
           reason?: string | null
@@ -2673,8 +2749,48 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      siga_actualizar_correo_recuperacion: {
+        Args: { p_recovery_email: string }
+        Returns: Json
+      }
+      siga_cancelar_solicitud_estudiante: {
+        Args: { p_request_id: string }
+        Returns: Json
+      }
+      siga_crear_solicitud_estudiante: {
+        Args: {
+          p_client_request_id?: string
+          p_reason?: string
+          p_request_type: string
+        }
+        Returns: Json
+      }
+      siga_dev_get_student_sandbox_state: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      siga_dev_manage_student_synthetic_data: {
+        Args: { p_action?: string; p_reference_date?: string }
+        Returns: Json
+      }
+      siga_dev_switch_student_context: {
+        Args: {
+          p_access_tier?: string
+          p_active_moment?: number
+          p_grade_year?: number
+          p_mencion_code?: string
+          p_reference_date?: string
+          p_school_year_code?: string
+          p_section_letter?: string
+        }
+        Returns: Json
+      }
       siga_devolver_prestamo_biblioteca: {
         Args: { p_loan_id: string }
+        Returns: Json
+      }
+      siga_generar_token_carnet: {
+        Args: { p_ttl_seconds?: number }
         Returns: Json
       }
       siga_gestionar_user_role: {
@@ -2696,6 +2812,33 @@ export type Database = {
           prompt: string
           question_type: string
           sort_order: number
+        }[]
+      }
+      siga_get_student_section_schedule: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          block_label: string
+          day_of_week: number
+          end_time: string
+          id: string
+          room_label: string
+          start_time: string
+          subject_code: string
+          subject_name: string
+          teacher_name: string
+        }[]
+      }
+      siga_get_student_subject_telemetry: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          absent_count: number
+          curriculum_subject_id: string
+          justified_count: number
+          late_count: number
+          present_count: number
+          subject_code: string
+          teacher_name: string | null
+          total_sessions: number
         }[]
       }
       siga_match_rag_chunks: {
@@ -2745,6 +2888,24 @@ export type Database = {
         }
         Returns: Json
       }
+      siga_service_claim_workflow_run: {
+        Args: {
+          p_expected_run_id?: string | null
+          p_source_record_id: string
+          p_source_table?: string
+          p_workflow_code: string
+        }
+        Returns: Json
+      }
+      siga_service_finish_workflow_run: {
+        Args: {
+          p_error_message?: string
+          p_result_json?: Json
+          p_status: string
+          p_workflow_run_id: string
+        }
+        Returns: Json
+      }
       siga_submit_exam_attempt: {
         Args: { p_answers: Json; p_online_exam_id: string }
         Returns: Json
@@ -2757,6 +2918,43 @@ export type Database = {
           p_records: Json
           p_session_date: string
           p_teacher_assignment_id: string
+        }
+        Returns: Json
+      }
+      siga_verificar_token_carnet: {
+        Args: { p_token: string }
+        Returns: Json
+      }
+      siga_guardar_expediente_orientacion: {
+        Args: {
+          p_case_code: string
+          p_confidential_notes: string
+          p_encryption_key?: string
+          p_record_category: string
+          p_risk_level?: string
+          p_school_year_id: string
+          p_student_user_id: string
+          p_summary: string
+        }
+        Returns: Json
+      }
+      siga_leer_expediente_orientacion: {
+        Args: {
+          p_encryption_key?: string
+          p_record_id: string
+        }
+        Returns: Json
+      }
+      siga_verificar_duplicado_entrega: {
+        Args: {
+          p_assignment_id: string
+          p_content_sha256: string
+        }
+        Returns: Json
+      }
+      siga_public_validar_magic_link_pasantia: {
+        Args: {
+          p_raw_token: string
         }
         Returns: Json
       }
@@ -2776,37 +2974,37 @@ type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
-    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+  | { schema: keyof DatabaseWithoutInternals },
   TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+    DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
-    ? R
-    : never
+  ? R
+  : never
   : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-        Row: infer R
-      }
-      ? R
-      : never
-    : never
+    DefaultSchema["Views"])
+  ? (DefaultSchema["Tables"] &
+    DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+      Row: infer R
+    }
+  ? R
+  : never
+  : never
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof DefaultSchema["Tables"]
+  | { schema: keyof DatabaseWithoutInternals },
   TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
@@ -2816,22 +3014,22 @@ export type TablesInsert<
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Insert: infer I
-    }
-    ? I
-    : never
+    Insert: infer I
+  }
+  ? I
+  : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Insert: infer I
-      }
-      ? I
-      : never
-    : never
+  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+    Insert: infer I
+  }
+  ? I
+  : never
+  : never
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof DefaultSchema["Tables"]
+  | { schema: keyof DatabaseWithoutInternals },
   TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
@@ -2841,22 +3039,22 @@ export type TablesUpdate<
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Update: infer U
-    }
-    ? U
-    : never
+    Update: infer U
+  }
+  ? U
+  : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Update: infer U
-      }
-      ? U
-      : never
-    : never
+  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+    Update: infer U
+  }
+  ? U
+  : never
+  : never
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof DefaultSchema["Enums"]
+  | { schema: keyof DatabaseWithoutInternals },
   EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
@@ -2867,13 +3065,13 @@ export type Enums<
 }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-    : never
+  ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+  : never
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof DefaultSchema["CompositeTypes"]
+  | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
@@ -2884,8 +3082,8 @@ export type CompositeTypes<
 }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
+  ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+  : never
 
 export const Constants = {
   public: {
