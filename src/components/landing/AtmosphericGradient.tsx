@@ -419,6 +419,7 @@ export function AtmosphericGradient() {
     <div
       ref={containerRef}
       aria-hidden="true"
+      suppressHydrationWarning
       className="pointer-events-none absolute inset-0 z-0 overflow-hidden bg-[linear-gradient(180deg,#020617_0%,#0b1d59_36%,#1c47c4_60%,#a9c5f8_84%,#f7fafb_100%)] dark:bg-[linear-gradient(180deg,#020617_0%,#0b1d59_42%,#1c47c4_64%,#06112e_86%,#020617_100%)]"
     >
       <canvas ref={canvasRef} className="block size-full" />

@@ -1,6 +1,12 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { EVALUATION_TYPE_LABELS } from "./curriculum-tracks";
 import type { SubjectSimulatorInput } from "./grade-simulator";
 import { computeStudentMedals, type StudentMedal } from "./medals";
+import {
+  normalizeAffectedBlocksJson,
+  type StudentTeacherAbsenceAlert,
+  type TeacherAbsenceStatus,
+} from "./attendance-metrics";
 
 export interface StudentSubjectSummary {
   curriculumSubjectId: string;
@@ -18,6 +24,29 @@ export interface UpcomingEvaluationItem {
   weightPercent: number;
   scheduledDate: string;
   subjectName: string;
+}
+
+export type StudentCalendarEventSource =
+  | "evaluation"
+  | "assignment"
+  | "pending_exam";
+
+export interface StudentCalendarEventItem {
+  id: string;
+  /** Fecha en zona America/Caracas (`YYYY-MM-DD`). */
+  dateIso: string;
+  /** Hora límite opcional (ej. `23:59`) para entregas del Aula Virtual. */
+  timeLabel: string | null;
+  title: string;
+  subjectCode: string;
+  subjectName: string;
+  source: StudentCalendarEventSource;
+  typeLabel: string;
+  momentNumber: number | null;
+  weightPercent: number | null;
+  isCompleted: boolean;
+  statusLabel: string;
+  href: string;
 }
 
 export interface StudentMomentSummary {
@@ -67,7 +96,9 @@ export interface StudentDashboardData {
   momentos: StudentMomentSummary[];
   momentGradesByNumber: Record<number, StudentSubjectSummary[]>;
   upcomingEvaluations: UpcomingEvaluationItem[];
+  calendarEvents: StudentCalendarEventItem[];
   scheduleBlocks: StudentScheduleBlock[];
+  teacherAbsenceAlerts: StudentTeacherAbsenceAlert[];
   simulatorSubjects: SubjectSimulatorInput[];
   pendingSubjects: PendingSubjectAttemptSummary[];
   medals: StudentMedal[];
@@ -120,41 +151,6 @@ interface AttendanceRow {
   status: "present" | "absent" | "late" | "justified";
 }
 
-interface EvalItemJoinRow {
-  id: string;
-  evaluation_plan_id: string;
-  title: string;
-  evaluation_type: string;
-  weight_percent: number;
-  max_points: number;
-  scheduled_date: string | null;
-  evaluation_plans:
-    | {
-        status: string;
-        momento_id: string;
-        teacher_assignments:
-          | {
-              curriculum_subjects:
-                | { subjects: { name: string } | Array<{ name: string }> | null }
-                | Array<{ subjects: { name: string } | Array<{ name: string }> | null }>
-                | null;
-            }
-          | Array<{
-              curriculum_subjects:
-                | { subjects: { name: string } | Array<{ name: string }> | null }
-                | Array<{ subjects: { name: string } | Array<{ name: string }> | null }>
-                | null;
-            }>
-          | null;
-      }
-    | Array<{
-        status: string;
-        momento_id: string;
-        teacher_assignments: unknown;
-      }>
-    | null;
-}
-
 interface TeacherAssignmentRow {
   id: string;
   curriculum_subject_id: string;
@@ -163,6 +159,7 @@ interface TeacherAssignmentRow {
 interface EvalPlanRow {
   id: string;
   teacher_assignment_id: string;
+  momento_id: string;
   title: string;
   status: "draft" | "published" | "locked";
 }
@@ -170,6 +167,32 @@ interface EvalPlanRow {
 interface StudentScoreRow {
   evaluation_item_id: string;
   numeric_score: number | null;
+  literal_grade: string | null;
+}
+
+interface LmsAssignmentJoinRow {
+  id: string;
+  title: string;
+  due_at: string | null;
+  course_modules:
+    | {
+        virtual_courses:
+          | { teacher_assignment_id: string }
+          | Array<{ teacher_assignment_id: string }>
+          | null;
+      }
+    | Array<{
+        virtual_courses:
+          | { teacher_assignment_id: string }
+          | Array<{ teacher_assignment_id: string }>
+          | null;
+      }>
+    | null;
+}
+
+interface LmsSubmissionRow {
+  assignment_id: string;
+  is_late: boolean;
 }
 
 interface PendingAttemptJoinRow {
@@ -229,7 +252,9 @@ const EMPTY_STUDENT_DASHBOARD: StudentDashboardData = {
   momentos: [],
   momentGradesByNumber: {},
   upcomingEvaluations: [],
+  calendarEvents: [],
   scheduleBlocks: [],
+  teacherAbsenceAlerts: [],
   simulatorSubjects: [],
   pendingSubjects: [],
   medals: computeStudentMedals({
@@ -296,6 +321,7 @@ export async function getStudentDashboardData(
       ...EMPTY_STUDENT_DASHBOARD,
       activeLoansAndRequestsCount:
         (loansCount.count ?? 0) + (requestsCount.count ?? 0),
+      calendarEvents: buildPendingExamCalendarEvents(pendingSubjects),
       pendingSubjects,
       medals: computeStudentMedals({
         accessTier,
@@ -317,6 +343,7 @@ export async function getStudentDashboardData(
     requestsResult,
     teacherAssignmentsResult,
     scheduleRpcResult,
+    absenceAlertsRpcResult,
     pendingAttemptsResult,
     allMomentGradesResult,
   ] = await Promise.all([
@@ -357,6 +384,7 @@ export async function getStudentDashboardData(
       .eq("is_active", true)
       .returns<TeacherAssignmentRow[]>(),
     dbClient.rpc("siga_get_student_section_schedule"),
+    dbClient.rpc("siga_get_student_section_absence_alerts"),
     dbClient
       .from("pending_subject_attempts")
       .select(
@@ -385,95 +413,127 @@ export async function getStudentDashboardData(
   const assignmentBySubjectId = new Map(
     teacherAssignments.map((ta) => [ta.curriculum_subject_id, ta.id])
   );
+  const subjectByAssignmentId = new Map<
+    string,
+    { code: string; name: string }
+  >();
+  for (const cs of curriculumList) {
+    const subj = unwrapSingle(cs.subjects);
+    const taId = assignmentBySubjectId.get(cs.id);
+    if (subj && taId) {
+      subjectByAssignmentId.set(taId, { code: subj.code, name: subj.name });
+    }
+  }
 
-  let upcomingEvaluations: UpcomingEvaluationItem[] = [];
-  let publishedPlans: EvalPlanRow[] = [];
-  let evalItemsForMoment: EvalItemJoinRow[] = [];
-  let scoresForEnrollment: StudentScoreRow[] = [];
+  const assignmentIds = teacherAssignments.map((ta) => ta.id);
+  const todayCaracasIso = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Caracas",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 
-  if (activeMoment) {
-    const todayIso = new Date().toISOString().slice(0, 10);
-    const assignmentIds = teacherAssignments.map((ta) => ta.id);
+  const [
+    allPlansResult,
+    scoresResult,
+    lmsAssignmentsResult,
+    lmsSubmissionsResult,
+  ] = await Promise.all([
+    assignmentIds.length > 0
+      ? dbClient
+          .from("evaluation_plans")
+          .select("id, teacher_assignment_id, momento_id, title, status")
+          .in("teacher_assignment_id", assignmentIds)
+          .in("status", ["published", "locked"])
+          .returns<EvalPlanRow[]>()
+      : Promise.resolve({ data: [] as EvalPlanRow[] }),
+    dbClient
+      .from("student_scores")
+      .select("evaluation_item_id, numeric_score, literal_grade")
+      .eq("enrollment_id", enrollment.id)
+      .is("deleted_at", null)
+      .returns<StudentScoreRow[]>(),
+    assignmentIds.length > 0
+      ? dbClient
+          .from("assignments")
+          .select(
+            "id, title, due_at, course_modules!inner(virtual_courses!inner(teacher_assignment_id))"
+          )
+          .in(
+            "course_modules.virtual_courses.teacher_assignment_id",
+            assignmentIds
+          )
+          .not("due_at", "is", null)
+          .order("due_at", { ascending: true })
+          .returns<LmsAssignmentJoinRow[]>()
+      : Promise.resolve({ data: [] as LmsAssignmentJoinRow[] }),
+    dbClient
+      .from("assignment_submissions")
+      .select("assignment_id, is_late")
+      .eq("enrollment_id", enrollment.id)
+      .returns<LmsSubmissionRow[]>(),
+  ]);
 
-    const [upcomingResult, plansResult, planItemsResult, scoresResult] =
-      await Promise.all([
-        dbClient
+  const allPublishedPlans = allPlansResult.data ?? [];
+  const allPlanIds = allPublishedPlans.map((p) => p.id);
+  const scoresForEnrollment = scoresResult.data ?? [];
+  const lmsAssignments = lmsAssignmentsResult.data ?? [];
+  const lmsSubmissionsByAssignmentId = new Map(
+    (lmsSubmissionsResult.data ?? []).map((sub) => [sub.assignment_id, sub])
+  );
+
+  const allEvalItemsResult =
+    allPlanIds.length > 0
+      ? await dbClient
           .from("evaluation_items")
           .select(
-            "id, evaluation_plan_id, title, evaluation_type, weight_percent, max_points, scheduled_date, evaluation_plans!inner(status, momento_id, teacher_assignments!inner(section_id, curriculum_subjects!inner(subjects!inner(name))))"
+            "id, evaluation_plan_id, title, evaluation_type, weight_percent, max_points, scheduled_date"
           )
-          .eq("evaluation_plans.momento_id", activeMoment.id)
-          .eq(
-            "evaluation_plans.teacher_assignments.section_id",
-            enrollment.section_id
-          )
-          .in("evaluation_plans.status", ["published", "locked"])
-          .gte("scheduled_date", todayIso)
-          .order("scheduled_date", { ascending: true })
-          .limit(5)
-          .returns<EvalItemJoinRow[]>(),
-        assignmentIds.length > 0
-          ? dbClient
-              .from("evaluation_plans")
-              .select("id, teacher_assignment_id, title, status")
-              .eq("momento_id", activeMoment.id)
-              .in("teacher_assignment_id", assignmentIds)
-              .in("status", ["published", "locked"])
-              .returns<EvalPlanRow[]>()
-          : Promise.resolve({ data: [] as EvalPlanRow[] }),
-        assignmentIds.length > 0
-          ? dbClient
-              .from("evaluation_items")
-              .select(
-                "id, evaluation_plan_id, title, evaluation_type, weight_percent, max_points, scheduled_date, evaluation_plans!inner(status, momento_id, teacher_assignments!inner(section_id))"
-              )
-              .eq("evaluation_plans.momento_id", activeMoment.id)
-              .eq(
-                "evaluation_plans.teacher_assignments.section_id",
-                enrollment.section_id
-              )
-              .in("evaluation_plans.status", ["published", "locked"])
-              .order("scheduled_date", { ascending: true, nullsFirst: false })
-              .returns<EvalItemJoinRow[]>()
-          : Promise.resolve({ data: [] as EvalItemJoinRow[] }),
-        dbClient
-          .from("student_scores")
-          .select("evaluation_item_id, numeric_score")
-          .eq("enrollment_id", enrollment.id)
-          .is("deleted_at", null)
-          .returns<StudentScoreRow[]>(),
-      ]);
+          .in("evaluation_plan_id", allPlanIds)
+          .order("scheduled_date", { ascending: true, nullsFirst: false })
+          .returns<
+            Array<{
+              id: string;
+              evaluation_plan_id: string;
+              title: string;
+              evaluation_type: string;
+              weight_percent: number;
+              max_points: number;
+              scheduled_date: string | null;
+            }>
+          >()
+      : { data: [] };
 
-    publishedPlans = plansResult.data ?? [];
-    evalItemsForMoment = planItemsResult.data ?? [];
-    scoresForEnrollment = scoresResult.data ?? [];
+  const allEvalItems = allEvalItemsResult.data ?? [];
+  const planById = new Map(allPublishedPlans.map((p) => [p.id, p]));
+  const publishedPlans = activeMoment
+    ? allPublishedPlans.filter((p) => p.momento_id === activeMoment.id)
+    : [];
+  const activePlanIdSet = new Set(publishedPlans.map((p) => p.id));
+  const evalItemsForMoment = allEvalItems.filter((item) =>
+    activePlanIdSet.has(item.evaluation_plan_id)
+  );
 
-    upcomingEvaluations = (upcomingResult.data ?? [])
-      .filter((row): row is EvalItemJoinRow & { scheduled_date: string } =>
-        Boolean(row.scheduled_date)
-      )
-      .map((row) => {
-        const plan = unwrapSingle(row.evaluation_plans) as {
-          teacher_assignments?: {
-            curriculum_subjects?: {
-              subjects?: { name: string } | Array<{ name: string }> | null;
-            } | null;
-          } | null;
-        } | null;
-        const ta = unwrapSingle(plan?.teacher_assignments);
-        const cs = unwrapSingle(ta?.curriculum_subjects);
-        const subj = unwrapSingle(cs?.subjects);
-
-        return {
-          id: row.id,
-          title: row.title,
-          evaluationType: row.evaluation_type,
-          weightPercent: Number(row.weight_percent),
-          scheduledDate: row.scheduled_date,
-          subjectName: subj?.name ?? "Asignatura",
-        };
-      });
-  }
+  const upcomingEvaluations: UpcomingEvaluationItem[] = evalItemsForMoment
+    .filter(
+      (item): item is typeof item & { scheduled_date: string } =>
+        Boolean(item.scheduled_date) && item.scheduled_date! >= todayCaracasIso
+    )
+    .slice(0, 5)
+    .map((item) => {
+      const plan = planById.get(item.evaluation_plan_id);
+      const subj = plan
+        ? subjectByAssignmentId.get(plan.teacher_assignment_id)
+        : undefined;
+      return {
+        id: item.id,
+        title: item.title,
+        evaluationType: item.evaluation_type,
+        weightPercent: Number(item.weight_percent),
+        scheduledDate: item.scheduled_date,
+        subjectName: subj?.name ?? "Asignatura",
+      };
+    });
 
   const allMomentGrades = allMomentGradesResult.data ?? [];
   const momentIdToNumber = new Map(
@@ -554,13 +614,10 @@ export async function getStudentDashboardData(
   const planByAssignmentId = new Map(
     publishedPlans.map((p) => [p.teacher_assignment_id, p])
   );
-  const scoreByItemId = new Map(
-    scoresForEnrollment.map((s) => [
-      s.evaluation_item_id,
-      s.numeric_score !== null ? Number(s.numeric_score) : null,
-    ])
+  const scoreRowByItemId = new Map(
+    scoresForEnrollment.map((s) => [s.evaluation_item_id, s])
   );
-  const itemsByPlanId = new Map<string, EvalItemJoinRow[]>();
+  const itemsByPlanId = new Map<string, typeof evalItemsForMoment>();
   for (const item of evalItemsForMoment) {
     const bucket = itemsByPlanId.get(item.evaluation_plan_id) ?? [];
     bucket.push(item);
@@ -583,15 +640,21 @@ export async function getStudentDashboardData(
         passingThreshold: Number(subj.passing_threshold || 10),
         planTitle: plan?.title ?? null,
         planStatus: plan?.status ?? null,
-        items: items.map((ei) => ({
-          id: ei.id,
-          title: ei.title,
-          evaluationType: ei.evaluation_type,
-          weightPercent: Number(ei.weight_percent),
-          maxPoints: Number(ei.max_points ?? 20),
-          scheduledDate: ei.scheduled_date,
-          recordedScore: scoreByItemId.get(ei.id) ?? null,
-        })),
+        items: items.map((ei) => {
+          const sc = scoreRowByItemId.get(ei.id);
+          return {
+            id: ei.id,
+            title: ei.title,
+            evaluationType: ei.evaluation_type,
+            weightPercent: Number(ei.weight_percent),
+            maxPoints: Number(ei.max_points ?? 20),
+            scheduledDate: ei.scheduled_date,
+            recordedScore:
+              sc?.numeric_score !== null && sc?.numeric_score !== undefined
+                ? Number(sc.numeric_score)
+                : null,
+          };
+        }),
       };
     })
     .filter((s): s is SubjectSimulatorInput => s !== null)
@@ -615,6 +678,93 @@ export async function getStudentDashboardData(
 
   const pendingSubjects = mapPendingAttempts(pendingAttemptsResult.data ?? []);
 
+  const evaluationCalendarEvents: StudentCalendarEventItem[] = allEvalItems
+    .filter((item): item is typeof item & { scheduled_date: string } =>
+      Boolean(item.scheduled_date)
+    )
+    .map((item) => {
+      const plan = planById.get(item.evaluation_plan_id);
+      const subj = plan
+        ? subjectByAssignmentId.get(plan.teacher_assignment_id)
+        : undefined;
+      const subjectCode = subj?.code ?? "MAT";
+      const subjectName = subj?.name ?? "Asignatura";
+      const sc = scoreRowByItemId.get(item.id);
+      const hasNumeric =
+        sc?.numeric_score !== null && sc?.numeric_score !== undefined;
+      const hasLiteral = Boolean(sc?.literal_grade);
+      const isCompleted = hasNumeric || hasLiteral;
+      const statusLabel = hasNumeric
+        ? `Evaluada · ${Number(sc!.numeric_score).toFixed(1)}/${item.max_points ?? 20}`
+        : hasLiteral
+          ? `Evaluada · Literal ${sc!.literal_grade}`
+          : "Programada";
+
+      return {
+        id: `eval-${item.id}`,
+        dateIso: item.scheduled_date,
+        timeLabel: null,
+        title: item.title,
+        subjectCode,
+        subjectName,
+        source: "evaluation",
+        typeLabel:
+          EVALUATION_TYPE_LABELS[item.evaluation_type] ?? "Evaluación",
+        momentNumber: plan ? (momentIdToNumber.get(plan.momento_id) ?? null) : null,
+        weightPercent: Number(item.weight_percent),
+        isCompleted,
+        statusLabel,
+        href: `/estudiante/asignaturas/${encodeURIComponent(subjectCode)}`,
+      };
+    });
+
+  const lmsCalendarEvents: StudentCalendarEventItem[] = lmsAssignments
+    .map((assignment): StudentCalendarEventItem | null => {
+      if (!assignment.due_at) return null;
+      const parsedDue = formatCaracasDateTimeParts(assignment.due_at);
+      if (!parsedDue) return null;
+
+      const mod = unwrapSingle(assignment.course_modules);
+      const vc = unwrapSingle(mod?.virtual_courses);
+      const subj = vc?.teacher_assignment_id
+        ? subjectByAssignmentId.get(vc.teacher_assignment_id)
+        : undefined;
+      const subjectCode = subj?.code ?? "LMS";
+      const subjectName = subj?.name ?? "Aula Virtual";
+      const submission = lmsSubmissionsByAssignmentId.get(assignment.id);
+
+      return {
+        id: `lms-${assignment.id}`,
+        dateIso: parsedDue.dateIso,
+        timeLabel: parsedDue.timeLabel,
+        title: assignment.title,
+        subjectCode,
+        subjectName,
+        source: "assignment",
+        typeLabel: "Entrega en Aula Virtual",
+        momentNumber: null,
+        weightPercent: null,
+        isCompleted: Boolean(submission),
+        statusLabel: submission
+          ? submission.is_late
+            ? "Entregada (tardía)"
+            : "Entregada"
+          : "Pendiente de entrega",
+        href: `/aula-virtual/${encodeURIComponent(subjectCode)}`,
+      };
+    })
+    .filter((ev): ev is StudentCalendarEventItem => ev !== null);
+
+  const calendarEvents: StudentCalendarEventItem[] = [
+    ...evaluationCalendarEvents,
+    ...lmsCalendarEvents,
+    ...buildPendingExamCalendarEvents(pendingSubjects),
+  ].sort((a, b) => {
+    const dateDiff = a.dateIso.localeCompare(b.dateIso);
+    if (dateDiff !== 0) return dateDiff;
+    return (a.timeLabel ?? "99:99").localeCompare(b.timeLabel ?? "99:99");
+  });
+
   const medals = computeStudentMedals({
     accessTier,
     averageGrade,
@@ -625,8 +775,31 @@ export async function getStudentDashboardData(
     subjects: subjectsSummary,
   });
 
-  // Asegurar que unused map key lookup warnings no ocurran
-  void momentIdToNumber;
+  const teacherAbsenceAlerts: StudentTeacherAbsenceAlert[] = Array.isArray(
+    absenceAlertsRpcResult.data
+  )
+    ? absenceAlertsRpcResult.data.map((row) => {
+        const status: TeacherAbsenceStatus =
+          row.status === "reorganized" ||
+          row.status === "acknowledged" ||
+          row.status === "reported"
+            ? row.status
+            : "reported";
+        return {
+          id: row.absence_id,
+          absenceDate: row.absence_date,
+          teacherName: row.teacher_name?.trim() || "Docente de la sección",
+          subjectCodes: Array.isArray(row.subject_codes)
+            ? row.subject_codes
+            : [],
+          subjectNames: Array.isArray(row.subject_names)
+            ? row.subject_names
+            : [],
+          affectedBlocks: normalizeAffectedBlocksJson(row.affected_blocks),
+          status,
+        };
+      })
+    : [];
 
   return {
     hasEnrollment: true,
@@ -652,11 +825,55 @@ export async function getStudentDashboardData(
     })),
     momentGradesByNumber,
     upcomingEvaluations,
+    calendarEvents,
     scheduleBlocks,
+    teacherAbsenceAlerts,
     simulatorSubjects,
     pendingSubjects,
     medals,
   };
+}
+
+function formatCaracasDateTimeParts(
+  isoTimestamp: string
+): { dateIso: string; timeLabel: string } | null {
+  const dt = new Date(isoTimestamp);
+  if (Number.isNaN(dt.getTime())) return null;
+  const dateIso = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Caracas",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(dt);
+  const timeLabel = new Intl.DateTimeFormat("es-VE", {
+    timeZone: "America/Caracas",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(dt);
+  return { dateIso, timeLabel };
+}
+
+function buildPendingExamCalendarEvents(
+  attempts: PendingSubjectAttemptSummary[]
+): StudentCalendarEventItem[] {
+  return attempts
+    .filter((attempt) => Boolean(attempt.examDate))
+    .map((attempt) => ({
+      id: `pending-${attempt.id}`,
+      dateIso: attempt.examDate,
+      timeLabel: null,
+      title: `Materia pendiente · Momento ${attempt.attemptNumber}/4`,
+      subjectCode: attempt.subjectCode,
+      subjectName: attempt.subjectName,
+      source: "pending_exam",
+      typeLabel: "Examen de Materia Pendiente",
+      momentNumber: attempt.attemptNumber,
+      weightPercent: null,
+      isCompleted: true,
+      statusLabel: `${attempt.finalNumeric}/20 · ${attempt.passed ? "Aprobada" : "Pendiente"}`,
+      href: `/estudiante/asignaturas/${encodeURIComponent(attempt.subjectCode)}`,
+    }));
 }
 
 function mapPendingAttempts(

@@ -99,6 +99,8 @@ interface MomentRow {
 interface CurriculumSubjectRow {
   id: string;
   weekly_hours: number;
+  annual_hours?: number | null;
+  display_order?: number | null;
   subjects:
     | {
         code: string;
@@ -238,9 +240,9 @@ function resolveMentionLabShortcut(
   if (code.includes("ADUAN")) {
     return {
       mencionCode: "ADUANAS",
-      mencionName: mencionName ?? "Aduanas",
+      mencionName: mencionName ?? "Aduana",
       href: "/estudiante/asignaturas",
-      title: "Simulador Técnico de Aduanas y Comercio Exterior",
+      title: "Simulador Técnico de Aduana y Comercio Exterior",
       description:
         "Clasificación arancelaria Nandina, liquidación aduanera CIF/FOB y validación de Declaración Única (DUA / B/L).",
       tools: [
@@ -343,11 +345,12 @@ export async function getAulaVirtualCampusData(
       supabase
         .from("curriculum_subjects")
         .select(
-          "id, weekly_hours, subjects(code, name, grading_scale, is_technical_core)"
+          "id, weekly_hours, annual_hours, display_order, subjects(code, name, grading_scale, is_technical_core)"
         )
         .eq("mencion_id", enrollment.mencion_id)
         .eq("grade_year", enrollment.grade_year)
         .eq("is_active", true)
+        .order("display_order", { ascending: true })
         .returns<CurriculumSubjectRow[]>(),
       supabase
         .from("teacher_assignments")
@@ -482,7 +485,9 @@ export async function getAulaVirtualCampusData(
         const firstSlot = slots[0];
         const scheduleSummary = firstSlot
           ? `${WEEKDAY_SHORT[firstSlot.day_of_week] ?? "Clase"} ${firstSlot.start_time.slice(0, 5)}–${firstSlot.end_time.slice(0, 5)} · ${firstSlot.room_label}`
-          : `${cs.weekly_hours} h/semana`;
+          : cs.annual_hours && cs.weekly_hours <= 0
+            ? `${cs.annual_hours} h/año escolar`
+            : `${cs.weekly_hours} h/semana`;
 
         let completedActivitiesCount = 0;
         let totalActivitiesCount = 0;
@@ -654,7 +659,7 @@ export async function getAulaVirtualCampusData(
   const { data: teacherAssignments } = await supabase
     .from("teacher_assignments")
     .select(
-      "id, curriculum_subject_id, sections(grade_year, section_letter, menciones(code, name)), curriculum_subjects(id, weekly_hours, subjects(code, name, grading_scale, is_technical_core))"
+      "id, curriculum_subject_id, sections(grade_year, section_letter, menciones(code, name)), curriculum_subjects(id, weekly_hours, annual_hours, display_order, subjects(code, name, grading_scale, is_technical_core))"
     )
     .eq("teacher_user_id", profile.internalUserId)
     .is("deleted_at", null)
@@ -710,7 +715,10 @@ export async function getAulaVirtualCampusData(
         sectionLabel: sec
           ? `${sec.grade_year}.º Año · Sec. ${sec.section_letter}${menc ? ` · ${menc.name}` : ""}`
           : null,
-        scheduleSummary: `${cs.weekly_hours} h/semana`,
+        scheduleSummary:
+          cs.annual_hours && cs.weekly_hours <= 0
+            ? `${cs.annual_hours} h/año escolar`
+            : `${cs.weekly_hours} h/semana`,
         welcomeMessage: vc?.welcome_message ?? null,
         aiTutorEnabled: vc?.ai_tutor_enabled ?? true,
         isPublished: vc?.is_published ?? false,

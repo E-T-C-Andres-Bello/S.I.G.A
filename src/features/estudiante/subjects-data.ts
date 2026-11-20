@@ -19,12 +19,18 @@ import type {
   StudentDashboardData,
   StudentSubjectSummary,
 } from "./dashboard-data";
+import {
+  buildStudentAcademicHistory,
+  type StudentAcademicHistorySummary,
+} from "./academic-history";
 
 export interface CurriculumMatrixSubjectItem {
   curriculumSubjectId: string;
   subjectCode: string;
   subjectName: string;
   weeklyHours: number;
+  annualHours: number | null;
+  displayOrder: number;
   gradingScale: "NUMERIC_1_20" | "LITERAL_A_E";
   passingThreshold: number;
   isTechnicalCore: boolean;
@@ -37,6 +43,7 @@ export interface CurriculumMatrixSubjectItem {
 export interface CurriculumYearMatrix {
   gradeYear: number;
   totalWeeklyHours: number;
+  totalAnnualHours: number;
   subjectsCount: number;
   subjects: CurriculumMatrixSubjectItem[];
 }
@@ -45,6 +52,7 @@ export interface CurriculumMencionCatalog {
   id: string;
   code: string;
   name: string;
+  specialty: string | null;
   description: string | null;
   years: CurriculumYearMatrix[];
 }
@@ -106,6 +114,8 @@ export interface EnrolledSubjectCardData {
   subjectCode: string;
   subjectName: string;
   weeklyHours: number;
+  annualHours: number | null;
+  displayOrder: number;
   gradingScale: "NUMERIC_1_20" | "LITERAL_A_E";
   passingThreshold: number;
   isTechnicalCore: boolean;
@@ -150,6 +160,7 @@ export interface StudentCurriculumOverviewData {
     weeklyHoursCurrentYear: number;
     overallProgressPercent: number;
   };
+  academicHistory: StudentAcademicHistorySummary;
   bentoSnapshot: StudentDashboardData;
 }
 
@@ -169,6 +180,7 @@ export interface StudentSubjectDetailData {
     subjectName: string;
     gradeYearsInMencion: number[];
     weeklyHours: number | null;
+    annualHours: number | null;
     gradingScale: "NUMERIC_1_20" | "LITERAL_A_E";
     passingThreshold: number;
     isTechnicalCore: boolean;
@@ -192,6 +204,7 @@ interface MencionRow {
   id: string;
   code: string;
   name: string;
+  specialty: string | null;
   description: string | null;
 }
 
@@ -209,6 +222,9 @@ interface CurriculumMatrixRow {
   mencion_id: string;
   grade_year: number;
   weekly_hours: number;
+  annual_hours: number | null;
+  curriculum_component: string | null;
+  display_order: number | null;
   subjects: SubjectCatalogRow | SubjectCatalogRow[] | null;
 }
 
@@ -220,15 +236,31 @@ interface EnrollmentDetailRow {
   school_year_id: string;
   enrollment_status: string;
   sections: { section_letter: string } | Array<{ section_letter: string }> | null;
-  menciones: { code: string; name: string } | Array<{ code: string; name: string }> | null;
+  menciones:
+    | { code: string; name: string; specialty: string | null }
+    | Array<{ code: string; name: string; specialty: string | null }>
+    | null;
   school_years:
-    | { name: string; is_current: boolean }
-    | Array<{ name: string; is_current: boolean }>
+    | {
+        code: string;
+        name: string;
+        is_current: boolean;
+        status: string;
+        start_date: string | null;
+      }
+    | Array<{
+        code: string;
+        name: string;
+        is_current: boolean;
+        status: string;
+        start_date: string | null;
+      }>
     | null;
 }
 
 interface MomentRow {
   id: string;
+  school_year_id: string;
   moment_number: number;
   name: string;
   status: string;
@@ -506,21 +538,22 @@ async function fetchAcademicFoundation(internalUserId: string) {
     await Promise.all([
       dbClient
         .from("menciones")
-        .select("id, code, name, description")
+        .select("id, code, name, specialty, description")
         .eq("is_active", true)
         .order("name", { ascending: true })
         .returns<MencionRow[]>(),
       dbClient
         .from("curriculum_subjects")
         .select(
-          "id, mencion_id, grade_year, weekly_hours, subjects!inner(id, code, name, grading_scale, passing_threshold, is_technical_core)"
+          "id, mencion_id, grade_year, weekly_hours, annual_hours, curriculum_component, display_order, subjects!inner(id, code, name, grading_scale, passing_threshold, is_technical_core)"
         )
         .eq("is_active", true)
+        .order("display_order", { ascending: true })
         .returns<CurriculumMatrixRow[]>(),
       dbClient
         .from("enrollments")
         .select(
-          "id, section_id, grade_year, mencion_id, school_year_id, enrollment_status, sections(section_letter), menciones(code, name), school_years!inner(name, is_current)"
+          "id, section_id, grade_year, mencion_id, school_year_id, enrollment_status, sections(section_letter), menciones(code, name, specialty), school_years!inner(code, name, is_current, status, start_date)"
         )
         .eq("student_user_id", internalUserId)
         .is("deleted_at", null)
@@ -560,9 +593,12 @@ async function fetchActiveEnrollmentDetails(
   dbClient: NonNullable<Awaited<ReturnType<typeof createServerSupabaseClient>>>,
   enrollment: EnrollmentDetailRow,
   allEnrollmentIds: string[],
+  allSchoolYearIds: string[],
   accessTier: DashboardUserProfile["accessTier"]
 ) {
   const isVerified = accessTier === "verified_workspace";
+  const targetSchoolYearIds =
+    allSchoolYearIds.length > 0 ? allSchoolYearIds : [enrollment.school_year_id];
 
   const [
     momentosRes,
@@ -576,8 +612,8 @@ async function fetchActiveEnrollmentDetails(
   ] = await Promise.all([
     dbClient
       .from("momentos")
-      .select("id, moment_number, name, status")
-      .eq("school_year_id", enrollment.school_year_id)
+      .select("id, school_year_id, moment_number, name, status")
+      .in("school_year_id", targetSchoolYearIds)
       .order("moment_number", { ascending: true })
       .returns<MomentRow[]>(),
     dbClient
@@ -641,8 +677,13 @@ async function fetchActiveEnrollmentDetails(
       : Promise.resolve({ data: null, error: null }),
   ]);
 
+  const allMomentos = momentosRes.data ?? [];
+
   return {
-    momentos: momentosRes.data ?? [],
+    allMomentos,
+    momentos: allMomentos.filter(
+      (m) => m.school_year_id === enrollment.school_year_id
+    ),
     teacherAssignments: teacherAssignmentsRes.data ?? [],
     evalPlans: evalPlansRes.data ?? [],
     evalItems: evalItemsRes.data ?? [],
@@ -809,6 +850,17 @@ export async function getStudentCurriculumOverviewData(
         weeklyHoursCurrentYear: 0,
         overallProgressPercent: 0,
       },
+      academicHistory: {
+        overallCumulativeAverage: null,
+        overallEvaluatedNumericCount: 0,
+        currentYearAverage: null,
+        currentYearLabel: null,
+        totalApprovedSubjectsCount: 0,
+        totalTrackedSubjectsCount: 0,
+        pendingRecoveryCount: 0,
+        periods: [],
+        pendingAttempts: [],
+      },
       bentoSnapshot: {
         hasEnrollment: false,
         schoolYearName: null,
@@ -827,7 +879,9 @@ export async function getStudentCurriculumOverviewData(
         momentos: [],
         momentGradesByNumber: {},
         upcomingEvaluations: [],
+        calendarEvents: [],
         scheduleBlocks: [],
+        teacherAbsenceAlerts: [],
         simulatorSubjects: [],
         pendingSubjects: [],
         medals: [],
@@ -844,11 +898,16 @@ export async function getStudentCurriculumOverviewData(
     pendingAttempts,
   } = foundation;
 
+  const allSchoolYearIds = Array.from(
+    new Set(enrollments.map((e) => e.school_year_id))
+  );
+
   const details = currentEnrollment
     ? await fetchActiveEnrollmentDetails(
         dbClient,
         currentEnrollment,
         enrollments.map((e) => e.id),
+        allSchoolYearIds,
         profile.accessTier
       )
     : null;
@@ -950,10 +1009,19 @@ export async function getStudentCurriculumOverviewData(
         subjectCode: subj.code,
         subjectName: subj.name,
         weeklyHours: Number(cs.weekly_hours),
+        annualHours:
+          cs.annual_hours !== null && cs.annual_hours !== undefined
+            ? Number(cs.annual_hours)
+            : null,
+        displayOrder: Number(cs.display_order ?? 10),
         gradingScale: subj.grading_scale,
         passingThreshold: Number(subj.passing_threshold || 10),
         isTechnicalCore: Boolean(subj.is_technical_core),
-        axis: classifyCurriculumAxis(subj.code, Boolean(subj.is_technical_core)),
+        axis: classifyCurriculumAxis(
+          subj.code,
+          Boolean(subj.is_technical_core),
+          cs.curriculum_component
+        ),
         teacherName:
           telemetry?.teacher_name ??
           indexed.teacherFromScheduleByCode.get(upperCode) ??
@@ -985,8 +1053,8 @@ export async function getStudentCurriculumOverviewData(
     }
 
     enrolledSubjects.sort((a, b) => {
-      if (a.isTechnicalCore !== b.isTechnicalCore) {
-        return a.isTechnicalCore ? -1 : 1;
+      if (a.displayOrder !== b.displayOrder) {
+        return a.displayOrder - b.displayOrder;
       }
       return a.subjectName.localeCompare(b.subjectName, "es");
     });
@@ -1032,10 +1100,19 @@ export async function getStudentCurriculumOverviewData(
         subjectCode: subj.code,
         subjectName: subj.name,
         weeklyHours: Number(row.weekly_hours),
+        annualHours:
+          row.annual_hours !== null && row.annual_hours !== undefined
+            ? Number(row.annual_hours)
+            : null,
+        displayOrder: Number(row.display_order ?? 10),
         gradingScale: subj.grading_scale,
         passingThreshold: Number(subj.passing_threshold || 10),
         isTechnicalCore: Boolean(subj.is_technical_core),
-        axis: classifyCurriculumAxis(subj.code, Boolean(subj.is_technical_core)),
+        axis: classifyCurriculumAxis(
+          subj.code,
+          Boolean(subj.is_technical_core),
+          row.curriculum_component
+        ),
         status,
         finalNumeric: isCurrentYear
           ? enrolledMatch?.activeMomentGradeNumeric ?? null
@@ -1050,14 +1127,18 @@ export async function getStudentCurriculumOverviewData(
     const years: CurriculumYearMatrix[] = [];
     for (let yr = 1; yr <= 6; yr += 1) {
       const subs = (yearMap.get(yr) ?? []).sort((a, b) => {
-        if (a.isTechnicalCore !== b.isTechnicalCore) {
-          return a.isTechnicalCore ? 1 : -1;
+        if (a.displayOrder !== b.displayOrder) {
+          return a.displayOrder - b.displayOrder;
         }
         return a.subjectName.localeCompare(b.subjectName, "es");
       });
       years.push({
         gradeYear: yr,
         totalWeeklyHours: subs.reduce((sum, s) => sum + s.weeklyHours, 0),
+        totalAnnualHours: subs.reduce(
+          (sum, s) => sum + (s.annualHours ?? 0),
+          0
+        ),
         subjectsCount: subs.length,
         subjects: subs,
       });
@@ -1067,6 +1148,7 @@ export async function getStudentCurriculumOverviewData(
       id: m.id,
       code: m.code,
       name: m.name,
+      specialty: m.specialty ?? null,
       description: m.description,
       years,
     };
@@ -1158,11 +1240,90 @@ export async function getStudentCurriculumOverviewData(
     })),
     momentGradesByNumber,
     upcomingEvaluations: [],
+    calendarEvents: [],
     scheduleBlocks: [],
+    teacherAbsenceAlerts: [],
     simulatorSubjects: [],
     pendingSubjects: [],
     medals: [],
   };
+
+  const momentoNumberById = new Map<string, number>(
+    (details?.allMomentos ?? []).map((m) => [m.id, m.moment_number])
+  );
+
+  const academicHistory = buildStudentAcademicHistory({
+    enrollments: enrollments.map((e) => {
+      const sy = unwrapSingle(e.school_years);
+      const menc = unwrapSingle(e.menciones);
+      const sec = unwrapSingle(e.sections);
+      return {
+        enrollmentId: e.id,
+        schoolYearId: e.school_year_id,
+        schoolYearCode: sy?.code ?? sy?.name ?? "PERIODO",
+        schoolYearName: sy?.name ?? "Período escolar",
+        startDate: sy?.start_date ?? null,
+        isCurrent: Boolean(sy?.is_current),
+        gradeYear: Number(e.grade_year),
+        sectionLetter: sec?.section_letter ?? null,
+        mencionId: e.mencion_id,
+        mencionCode: menc?.code ?? null,
+        mencionName: menc?.name ?? null,
+        mencionSpecialty: menc?.specialty ?? null,
+        enrollmentStatus: e.enrollment_status,
+      };
+    }),
+    curriculumSubjects: curriculumRows
+      .map((row) => {
+        const sub = unwrapSingle(row.subjects);
+        if (!sub) return null;
+        return {
+          curriculumSubjectId: row.id,
+          mencionId: row.mencion_id,
+          gradeYear: Number(row.grade_year),
+          subjectCode: sub.code,
+          subjectName: sub.name,
+          weeklyHours: Number(row.weekly_hours),
+          annualHours:
+            row.annual_hours !== null && row.annual_hours !== undefined
+              ? Number(row.annual_hours)
+              : null,
+          displayOrder: Number(row.display_order ?? 10),
+          gradingScale: sub.grading_scale,
+          passingThreshold: Number(sub.passing_threshold || 10),
+          isTechnicalCore: Boolean(sub.is_technical_core),
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null),
+    momentGrades: (details?.finalGrades ?? [])
+      .map((fg) => {
+        const momentNumber = momentoNumberById.get(fg.momento_id);
+        if (momentNumber === undefined) return null;
+        return {
+          enrollmentId: fg.enrollment_id,
+          curriculumSubjectId: fg.curriculum_subject_id,
+          momentNumber,
+          finalNumeric: fg.final_numeric,
+          finalLiteral: fg.final_literal,
+          isLocked: Boolean(fg.is_locked),
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null),
+    pendingAttempts: pendingAttempts.map((att) => {
+      const cs = unwrapSingle(att.curriculum_subjects);
+      const sub = unwrapSingle(cs?.subjects);
+      return {
+        id: att.id,
+        curriculumSubjectId: att.curriculum_subject_id,
+        subjectCode: sub?.code ?? "PEND",
+        subjectName: sub?.name ?? "Asignatura pendiente",
+        attemptNumber: Number(att.attempt_number),
+        examDate: att.exam_date,
+        finalNumeric: Number(att.final_numeric),
+        passed: Boolean(att.passed),
+      };
+    }),
+  });
 
   return {
     hasEnrollment: Boolean(currentEnrollment),
@@ -1194,6 +1355,7 @@ export async function getStudentCurriculumOverviewData(
             )
           : 0,
     },
+    academicHistory,
     bentoSnapshot,
   };
 }
@@ -1245,11 +1407,16 @@ export async function getStudentSubjectDetailData(
   const subj = unwrapSingle(chosenRow.subjects);
   if (!subj) return null;
 
+  const allSchoolYearIds = Array.from(
+    new Set(enrollments.map((e) => e.school_year_id))
+  );
+
   const details = currentEnrollment
     ? await fetchActiveEnrollmentDetails(
         dbClient,
         currentEnrollment,
         enrollments.map((e) => e.id),
+        allSchoolYearIds,
         profile.accessTier
       )
     : null;
@@ -1379,10 +1546,18 @@ export async function getStudentSubjectDetailData(
       subjectName: subj.name,
       gradeYearsInMencion,
       weeklyHours: Number(chosenRow.weekly_hours),
+      annualHours:
+        chosenRow.annual_hours !== null && chosenRow.annual_hours !== undefined
+          ? Number(chosenRow.annual_hours)
+          : null,
       gradingScale: subj.grading_scale,
       passingThreshold: Number(subj.passing_threshold || 10),
       isTechnicalCore: Boolean(subj.is_technical_core),
-      axis: classifyCurriculumAxis(subj.code, Boolean(subj.is_technical_core)),
+      axis: classifyCurriculumAxis(
+        subj.code,
+        Boolean(subj.is_technical_core),
+        chosenRow.curriculum_component
+      ),
       curriculumStatus,
     },
     teacherName:

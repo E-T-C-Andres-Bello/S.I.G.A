@@ -1,11 +1,21 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Dialog, Popover } from "radix-ui";
-import { Bell, ChevronDown, Loader2, LogOut, Menu, X } from "lucide-react";
+import {
+  ChevronDown,
+  Loader2,
+  LogOut,
+  Menu,
+  Settings,
+  X,
+} from "lucide-react";
 import { MotionConfig } from "motion/react";
 import { cn } from "cn";
+import { NotificationsBellPopover } from "@/components/shared/NotificationsBellPopover";
+import { NotificationsProvider } from "@/components/shared/NotificationsProvider";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { SigaGlobalLoader } from "@/components/ui/ai-loader";
 import { Toaster } from "@/components/ui/sonner";
@@ -14,7 +24,6 @@ import { getBrowserSupabaseClient } from "@/lib/supabase/client";
 import type { DashboardUserProfile } from "@/lib/supabase/dashboard-session";
 import { formatVenezuelanCedulaDisplay } from "@/lib/validators/auth";
 import { DashboardSidebar, ROLE_LABELS } from "./DashboardSidebar";
-import { GlassCustomizer } from "./GlassCustomizer";
 import { GlassThemeProvider } from "./GlassThemeContext";
 
 const SIDEBAR_STORAGE_KEY = "siga-sidebar-expanded-v1";
@@ -40,6 +49,7 @@ export function DashboardShell({
   const isStandaloneAulaVirtual =
     pathname === "/aula-virtual" || pathname.startsWith("/aula-virtual/");
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = React.useState(false);
   const [sidebarExpanded, setSidebarExpanded] = React.useState(false);
   const [signingOut, setSigningOut] = React.useState(false);
   const [showIntroLoader, setShowIntroLoader] = React.useState(false);
@@ -115,11 +125,16 @@ export function DashboardShell({
       <MotionConfig reducedMotion="user">
         <TooltipProvider delayDuration={180}>
           <GlassThemeProvider>
-            <main id="main" className="min-h-screen w-full outline-none">
-              {children}
-            </main>
-            {devToolbar}
-            <Toaster position="bottom-right" richColors />
+            <NotificationsProvider
+              internalUserId={profile.internalUserId}
+              initialUnreadCount={profile.unreadNotificationsCount}
+            >
+              <main id="main" className="min-h-screen w-full outline-none">
+                {children}
+              </main>
+              {devToolbar}
+              <Toaster position="bottom-right" richColors />
+            </NotificationsProvider>
           </GlassThemeProvider>
         </TooltipProvider>
       </MotionConfig>
@@ -130,7 +145,11 @@ export function DashboardShell({
     <MotionConfig reducedMotion="user">
       <TooltipProvider delayDuration={180}>
         <GlassThemeProvider>
-          <div className="siga-dashboard-bg font-hero relative min-h-screen text-foreground transition-colors duration-300">
+          <NotificationsProvider
+            internalUserId={profile.internalUserId}
+            initialUnreadCount={profile.unreadNotificationsCount}
+          >
+            <div className="siga-dashboard-bg font-hero relative min-h-screen text-foreground transition-colors duration-300">
           {showIntroLoader ? (
             <SigaGlobalLoader
               text="S.I.G.A."
@@ -214,43 +233,9 @@ export function DashboardShell({
                   </span>
                 </div>
 
-                {/* Esquina superior derecha: Cristal, Avisos, Tema y Píldora de Perfil */}
+                {/* Esquina superior derecha: Avisos, Tema y Píldora de Perfil */}
                 <div className="flex shrink-0 items-center gap-2">
-                  <GlassCustomizer />
-
-                  <Popover.Root>
-                    <Popover.Trigger asChild>
-                      <button
-                        type="button"
-                        aria-label={`Notificaciones (${profile.unreadNotificationsCount} sin leer)`}
-                        className="siga-glass-pill relative inline-flex h-9 cursor-pointer items-center gap-2 rounded-full border px-3 text-xs font-medium text-foreground transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none"
-                      >
-                        <Bell className="size-3.5 text-primary" aria-hidden="true" />
-                        <span className="hidden md:inline">Avisos</span>
-                        {profile.unreadNotificationsCount > 0 ? (
-                          <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold tabular-nums text-primary-foreground">
-                            {profile.unreadNotificationsCount > 9
-                              ? "9+"
-                              : profile.unreadNotificationsCount}
-                          </span>
-                        ) : null}
-                      </button>
-                    </Popover.Trigger>
-                    <Popover.Portal>
-                      <Popover.Content
-                        align="end"
-                        sideOffset={8}
-                        className="siga-glass-surface font-hero z-50 w-72 rounded-2xl border p-4 text-xs text-foreground shadow-xl outline-none"
-                      >
-                        <p className="font-semibold">Notificaciones</p>
-                        <p className="mt-1.5 leading-relaxed text-muted-foreground">
-                          {profile.unreadNotificationsCount > 0
-                            ? `Tienes ${profile.unreadNotificationsCount} aviso(s) escolar(es) pendiente(s) por revisar.`
-                            : "No tienes notificaciones nuevas en este momento."}
-                        </p>
-                      </Popover.Content>
-                    </Popover.Portal>
-                  </Popover.Root>
+                  <NotificationsBellPopover />
 
                   <ThemeToggle
                     showLabel
@@ -258,7 +243,10 @@ export function DashboardShell({
                   />
 
                   {/* Píldora + Popover de Perfil del Usuario (Esquina Superior Derecha) */}
-                  <Popover.Root>
+                  <Popover.Root
+                    open={profileMenuOpen}
+                    onOpenChange={setProfileMenuOpen}
+                  >
                     <Popover.Trigger asChild>
                       <button
                         type="button"
@@ -266,7 +254,16 @@ export function DashboardShell({
                         className="siga-glass-pill inline-flex h-9 cursor-pointer items-center gap-2 rounded-full border py-1 pr-2.5 pl-1 text-xs font-medium text-foreground transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none"
                       >
                         <span className="relative flex size-7 shrink-0 items-center justify-center rounded-full border border-white/75 bg-gradient-to-br from-[#1c47c4] to-[#0b1d59] text-[10.5px] font-semibold text-white shadow-xs">
-                          {initials || "AB"}
+                          {profile.avatarWebpUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={profile.avatarWebpUrl}
+                              alt={`Avatar de ${profile.firstName}`}
+                              className="size-full rounded-full object-cover"
+                            />
+                          ) : (
+                            initials || "AB"
+                          )}
                           <span
                             aria-hidden="true"
                             className="absolute -right-0.5 -bottom-0.5 size-2 rounded-full bg-emerald-400 ring-1 ring-white dark:ring-[#07122e]"
@@ -289,7 +286,16 @@ export function DashboardShell({
                       >
                         <div className="flex items-center gap-3">
                           <div className="relative flex size-10 shrink-0 items-center justify-center rounded-full border border-white/75 bg-gradient-to-br from-[#1c47c4] to-[#0b1d59] text-xs font-semibold text-white shadow-xs">
-                            {initials || "AB"}
+                            {profile.avatarWebpUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={profile.avatarWebpUrl}
+                                alt={`Avatar de ${profile.firstName}`}
+                                className="size-full rounded-full object-cover"
+                              />
+                            ) : (
+                              initials || "AB"
+                            )}
                             <span
                               aria-hidden="true"
                               className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full bg-emerald-400 ring-2 ring-white dark:ring-[#07122e]"
@@ -324,22 +330,40 @@ export function DashboardShell({
                           ) : null}
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={handleSignOut}
-                          disabled={signingOut}
-                          className="siga-glass-inner mt-3.5 flex h-9 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border text-xs font-medium text-foreground transition-colors hover:bg-rose-500/12 hover:text-rose-600 dark:hover:text-rose-300 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none disabled:opacity-60"
-                        >
-                          {signingOut ? (
-                            <Loader2
-                              className="size-3.5 animate-spin"
-                              aria-hidden="true"
-                            />
-                          ) : (
-                            <LogOut className="size-3.5" aria-hidden="true" />
-                          )}
-                          <span>Cerrar sesión</span>
-                        </button>
+                        <div className="mt-3.5 flex flex-col gap-2">
+                          {profile.primaryRole === "estudiante" ? (
+                            <Link
+                              href="/estudiante/perfil"
+                              prefetch={true}
+                              onClick={() => setProfileMenuOpen(false)}
+                              className={cn(
+                                "siga-glass-inner flex h-9 w-full items-center justify-center gap-2 rounded-xl border text-xs font-medium text-foreground transition-colors hover:border-primary/45 hover:text-primary dark:hover:text-sky-300 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none",
+                                pathname === "/estudiante/perfil" &&
+                                  "border-primary/50 bg-primary/10 text-primary dark:text-sky-200"
+                              )}
+                            >
+                              <Settings className="size-3.5" aria-hidden="true" />
+                              <span>Mi perfil y configuración</span>
+                            </Link>
+                          ) : null}
+
+                          <button
+                            type="button"
+                            onClick={handleSignOut}
+                            disabled={signingOut}
+                            className="siga-glass-inner flex h-9 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border text-xs font-medium text-foreground transition-colors hover:bg-rose-500/12 hover:text-rose-600 dark:hover:text-rose-300 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none disabled:opacity-60"
+                          >
+                            {signingOut ? (
+                              <Loader2
+                                className="size-3.5 animate-spin"
+                                aria-hidden="true"
+                              />
+                            ) : (
+                              <LogOut className="size-3.5" aria-hidden="true" />
+                            )}
+                            <span>Cerrar sesión</span>
+                          </button>
+                        </div>
                       </Popover.Content>
                     </Popover.Portal>
                   </Popover.Root>
@@ -355,8 +379,9 @@ export function DashboardShell({
             </div>
           </div>
           </div>
-          {devToolbar}
-          <Toaster position="bottom-right" richColors />
+            {devToolbar}
+            <Toaster position="bottom-right" richColors />
+          </NotificationsProvider>
         </GlassThemeProvider>
       </TooltipProvider>
     </MotionConfig>

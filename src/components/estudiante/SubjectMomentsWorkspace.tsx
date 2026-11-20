@@ -109,11 +109,10 @@ export function SubjectMomentsWorkspace({
 
   const reviewRequestHref = React.useMemo(() => {
     const params = new URLSearchParams({
-      tab: "tramites",
       requestType: "revision_notas",
       subject: `${subjectName} (${subjectCode})`,
     });
-    return `/estudiante?${params.toString()}`;
+    return `/estudiante/tramites?${params.toString()}`;
   }, [subjectCode, subjectName]);
 
   if (accessTier === "provisional_cedula") {

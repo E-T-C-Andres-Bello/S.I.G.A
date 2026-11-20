@@ -1,9 +1,18 @@
 "use client";
 
 import * as React from "react";
-import { CalendarClock, Clock, MapPin, UserCheck } from "lucide-react";
+import {
+  CalendarClock,
+  Clock,
+  Download,
+  MapPin,
+  Printer,
+  UserCheck,
+} from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "cn";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Empty,
   EmptyDescription,
@@ -11,12 +20,19 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
+import { Spinner } from "@/components/ui/spinner";
 import type { StudentScheduleBlock } from "@/features/estudiante/dashboard-data";
 
 export interface StudentSchedulePanelProps {
   scheduleBlocks: StudentScheduleBlock[];
   todayIso: string;
   sectionLabel: string;
+  studentName: string;
+  cedulaDisplay: string;
+  schoolYearName: string | null;
+  gradeYear?: number | null;
+  mencionName?: string | null;
+  sectionLetter?: string | null;
 }
 
 const SCHOOL_DAYS = [
@@ -42,12 +58,71 @@ export function StudentSchedulePanel({
   scheduleBlocks,
   todayIso,
   sectionLabel,
+  studentName,
+  cedulaDisplay,
+  schoolYearName,
+  gradeYear,
+  mencionName,
+  sectionLetter,
 }: StudentSchedulePanelProps) {
   const activeWeekday = React.useMemo(
     () => resolveCaracasWeekdayNumber(todayIso),
     [todayIso]
   );
   const [selectedDay, setSelectedDay] = React.useState<number>(activeWeekday);
+  const [exportingMode, setExportingMode] = React.useState<
+    "print" | "download" | null
+  >(null);
+  const exportLockRef = React.useRef(false);
+
+  const handleExportPdf = React.useCallback(
+    async (mode: "print" | "download") => {
+      if (exportLockRef.current || scheduleBlocks.length === 0) return;
+      exportLockRef.current = true;
+      setExportingMode(mode);
+
+      try {
+        const { exportStudentSchedulePdf } = await import(
+          "@/components/pdf/StudentSchedulePdf"
+        );
+        const result = await exportStudentSchedulePdf(
+          scheduleBlocks,
+          {
+            studentName,
+            cedulaDisplay,
+            sectionLabel,
+            schoolYearName,
+            gradeYear,
+            mencionName,
+            sectionLetter,
+          },
+          mode
+        );
+        if (mode === "print" && result.openedInTab) {
+          toast.success("Horario institucional listo para imprimir en nueva pestaña.");
+        } else {
+          toast.success("Horario escolar descargado en PDF.");
+        }
+      } catch {
+        toast.error(
+          "No se pudo generar el PDF del horario en este momento. Intenta nuevamente."
+        );
+      } finally {
+        setExportingMode(null);
+        exportLockRef.current = false;
+      }
+    },
+    [
+      cedulaDisplay,
+      gradeYear,
+      mencionName,
+      scheduleBlocks,
+      schoolYearName,
+      sectionLabel,
+      sectionLetter,
+      studentName,
+    ]
+  );
 
   const blocksByDay = React.useMemo(() => {
     const map = new Map<number, StudentScheduleBlock[]>();
@@ -84,9 +159,56 @@ export function StudentSchedulePanel({
           </p>
         </div>
 
-        <Badge variant="secondary" className="tabular-nums">
-          {scheduleBlocks.length} bloque(s) semanal(es)
-        </Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="secondary" className="tabular-nums">
+            {scheduleBlocks.length} bloque(s) semanal(es)
+          </Badge>
+
+          {scheduleBlocks.length > 0 ? (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => void handleExportPdf("print")}
+                disabled={exportingMode !== null}
+                className="rounded-xl text-xs"
+              >
+                {exportingMode === "print" ? (
+                  <>
+                    <Spinner data-icon="inline-start" />
+                    Preparando PDF...
+                  </>
+                ) : (
+                  <>
+                    <Printer data-icon="inline-start" />
+                    Imprimir horario
+                  </>
+                )}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void handleExportPdf("download")}
+                disabled={exportingMode !== null}
+                aria-label="Descargar horario en PDF"
+                className="siga-glass-inner rounded-xl text-xs"
+              >
+                {exportingMode === "download" ? (
+                  <>
+                    <Spinner data-icon="inline-start" />
+                    Descargando...
+                  </>
+                ) : (
+                  <>
+                    <Download data-icon="inline-start" />
+                    PDF
+                  </>
+                )}
+              </Button>
+            </>
+          ) : null}
+        </div>
       </div>
 
       {scheduleBlocks.length === 0 ? (

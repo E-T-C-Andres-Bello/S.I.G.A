@@ -771,7 +771,7 @@ export function AulaVirtualCampusView({
                     </div>
                     <p className="mt-1 text-xs text-slate-500 sm:text-sm dark:text-slate-400">
                       {data.labShortcut?.description ??
-                        "Entornos interactivos especializados integrados al Aula Virtual para Telemática, Aduanas y Turismo."}
+                        "Entornos interactivos especializados integrados al Aula Virtual para Telemática, Aduana y Turismo."}
                     </p>
                   </div>
                 </div>

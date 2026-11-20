@@ -5,22 +5,23 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "motion/react";
-import { Popover } from "radix-ui";
 import {
   Bell,
   BookOpenCheck,
+  CalendarCheck2,
+  FileText,
   Home,
   Loader2,
   LogOut,
   Moon,
-  SlidersHorizontal,
   Sun,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "cn";
+import { NotificationsBellPopover } from "@/components/shared/NotificationsBellPopover";
+import { useNotifications } from "@/components/shared/NotificationsProvider";
 import { getBrowserSupabaseClient } from "@/lib/supabase/client";
 import type { DashboardUserProfile } from "@/lib/supabase/dashboard-session";
-import { GlassCustomizer } from "./GlassCustomizer";
 
 export interface SidebarNavItem {
   id: string;
@@ -197,14 +198,16 @@ export function DashboardSidebar({
 }: DashboardSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { unreadCount } = useNotifications();
   const rawUid = React.useId().replace(/:/g, "");
   const clipId = `siga-curved-clip-${rawUid}`;
   const borderGradId = `siga-curved-border-${rawUid}`;
   const innerGradId = `siga-curved-inner-${rawUid}`;
 
   const homeHref = ROLE_HOME_PATH[profile.primaryRole] ?? "/estudiante";
+  const isVerifiedWorkspace = profile.accessTier === "verified_workspace";
   const canAccessAulaVirtual =
-    profile.primaryRole === "estudiante" ||
+    (profile.primaryRole === "estudiante" && isVerifiedWorkspace) ||
     profile.primaryRole === "docente" ||
     profile.primaryRole === "coordinador_mencion" ||
     profile.primaryRole === "direccion";
@@ -222,17 +225,31 @@ export function DashboardSidebar({
       },
     ];
 
-    if (profile.primaryRole === "estudiante") {
-      items.push({
-        id: "asignaturas",
-        label: "Asignaturas y Pensum",
-        href: "/estudiante/asignaturas",
-        icon: BookOpenCheck,
-      });
+    if (profile.primaryRole === "estudiante" && isVerifiedWorkspace) {
+      items.push(
+        {
+          id: "asignaturas",
+          label: "Asignaturas y Pensum",
+          href: "/estudiante/asignaturas",
+          icon: BookOpenCheck,
+        },
+        {
+          id: "asistencia",
+          label: "Asistencia",
+          href: "/estudiante/asistencia",
+          icon: CalendarCheck2,
+        },
+        {
+          id: "tramites",
+          label: "Trámites",
+          href: "/estudiante/tramites",
+          icon: FileText,
+        }
+      );
     }
 
     return items;
-  }, [homeHref, profile.primaryRole]);
+  }, [homeHref, isVerifiedWorkspace, profile.primaryRole]);
 
   const asideRef = React.useRef<HTMLElement | null>(null);
   const [size, setSize] = React.useState({
@@ -703,19 +720,23 @@ export function DashboardSidebar({
 
         <div className="mx-auto h-px w-4/5 bg-border/60" />
 
-        {/* Opciones del sistema (Avisos, Efecto Cristal, Tema, Cerrar sesión) — SIN perfil */}
+        {/* Opciones del sistema (Avisos, Tema, Cerrar sesión) — cristal y color viven en Perfil */}
         <div
           className="flex flex-col gap-1"
           onMouseLeave={() => setHoveredUtilId(null)}
         >
-          {/* 1. Notificaciones */}
-          <Popover.Root>
-            <Popover.Trigger asChild>
+          {/* 1. Notificaciones en tiempo real */}
+          <NotificationsBellPopover
+            side="right"
+            align="end"
+            sideOffset={14}
+            onNavigate={onNavigate}
+            trigger={
               <button
                 type="button"
                 onMouseEnter={() => setHoveredUtilId("notifications")}
                 onFocus={() => setHoveredUtilId("notifications")}
-                aria-label={`Notificaciones (${profile.unreadNotificationsCount} sin leer)`}
+                aria-label={`Notificaciones (${unreadCount} sin leer)`}
                 title={expanded ? undefined : "Notificaciones"}
                 className={cn(
                   "relative z-10 flex h-9.5 cursor-pointer items-center rounded-xl text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none",
@@ -737,7 +758,7 @@ export function DashboardSidebar({
                     strokeWidth={1.8}
                     aria-hidden="true"
                   />
-                  {profile.unreadNotificationsCount > 0 ? (
+                  {unreadCount > 0 ? (
                     <span
                       aria-hidden="true"
                       className="absolute -top-1 -right-1 size-2 rounded-full bg-primary ring-2 ring-white dark:ring-[#07122e]"
@@ -747,70 +768,18 @@ export function DashboardSidebar({
                 {expanded ? (
                   <span className="flex flex-1 items-center justify-between truncate">
                     <span>Notificaciones</span>
-                    {profile.unreadNotificationsCount > 0 ? (
-                      <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-primary dark:text-[#7dd3fc]">
-                        {profile.unreadNotificationsCount}
+                    {unreadCount > 0 ? (
+                      <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-primary">
+                        {unreadCount > 99 ? "99+" : unreadCount}
                       </span>
                     ) : null}
                   </span>
                 ) : null}
               </button>
-            </Popover.Trigger>
-            <Popover.Portal>
-              <Popover.Content
-                side="right"
-                align="end"
-                sideOffset={14}
-                className="siga-glass-surface font-hero z-50 w-72 rounded-2xl border p-4 text-xs text-foreground shadow-xl outline-none"
-              >
-                <p className="font-semibold">Notificaciones escolares</p>
-                <p className="mt-1.5 leading-relaxed text-muted-foreground">
-                  {profile.unreadNotificationsCount > 0
-                    ? `Tienes ${profile.unreadNotificationsCount} aviso(s) institucional(es) pendiente(s).`
-                    : "No tienes notificaciones pendientes en este momento."}
-                </p>
-              </Popover.Content>
-            </Popover.Portal>
-          </Popover.Root>
-
-          {/* 2. Efecto Cristal */}
-          <GlassCustomizer
-            side="right"
-            align="end"
-            trigger={
-              <button
-                type="button"
-                onMouseEnter={() => setHoveredUtilId("glass")}
-                onFocus={() => setHoveredUtilId("glass")}
-                aria-label="Personalizar efecto cristal"
-                title={expanded ? undefined : "Efecto cristal"}
-                className={cn(
-                  "relative z-10 flex h-9.5 cursor-pointer items-center rounded-xl text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none",
-                  expanded
-                    ? "w-full gap-2.5 px-3"
-                    : "mx-auto w-10 justify-center"
-                )}
-              >
-                {hoveredUtilId === "glass" ? (
-                  <motion.span
-                    layoutId={`siga-util-pill-${rawUid}`}
-                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                    className="siga-curved-sub-pill pointer-events-none absolute inset-0 -z-10 rounded-xl"
-                  />
-                ) : null}
-                <SlidersHorizontal
-                  className="size-4 shrink-0"
-                  strokeWidth={1.8}
-                  aria-hidden="true"
-                />
-                {expanded ? (
-                  <span className="truncate">Efecto cristal</span>
-                ) : null}
-              </button>
             }
           />
 
-          {/* 3. Modo Claro / Oscuro */}
+          {/* 2. Modo Claro / Oscuro */}
           <button
             type="button"
             onClick={handleToggleTheme}

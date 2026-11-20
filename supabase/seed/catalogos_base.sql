@@ -1,16 +1,36 @@
 -- ============================================================================
 -- S.I.G.A. — Catálogos Base Estructurales (Sin PII ni Contraseñas)
 -- Seguro para versionar en Git y aplicar de forma idempotente en entornos nuevos.
--- Incluye: Menciones Técnicas, Roles RBAC, Permisos, Asignaturas y Malla 1.º–6.º
+-- Incluye: Menciones Técnicas (con Especialidad), Roles RBAC, Permisos,
+-- Áreas de Formación oficiales y Planes de Estudio 1.º–6.º año (MPPE)
 -- ============================================================================
 
-INSERT INTO public.menciones (code, name, description, is_active)
+INSERT INTO public.menciones (code, name, specialty, description, is_active)
 VALUES
-  ('TELEMATICA', 'Telemática', 'Redes, infraestructura TI, sistemas, programación y bases de datos (1.º a 6.º año).', true),
-  ('ADUANAS', 'Aduanas', 'Comercio exterior, clasificación arancelaria, valoración CIF/FOB y logística portuaria (1.º a 6.º año).', true),
-  ('TURISMO', 'Turismo', 'Hospitalidad, guiatura patrimonial de Guayana, eventos, protocolo y recepción hotelera (1.º a 6.º año).', true)
+  (
+    'ADUANAS',
+    'Aduana',
+    'Economía Social',
+    'Especialidad Economía Social · Mención Aduana (1.º a 5.º año y Práctica Profesional de 1440 h en 6.º año).',
+    true
+  ),
+  (
+    'TURISMO',
+    'Turismo',
+    'Economía Social',
+    'Especialidad Economía Social · Mención Turismo (1.º a 5.º año y Práctica Profesional de 1440 h en 6.º año).',
+    true
+  ),
+  (
+    'TELEMATICA',
+    'Telemática',
+    'Industrial',
+    'Especialidad Industrial · Mención Telemática (1.º a 5.º año y Práctica Profesional de 1440 h en 6.º año).',
+    true
+  )
 ON CONFLICT (code) DO UPDATE
   SET name = EXCLUDED.name,
+      specialty = EXCLUDED.specialty,
       description = EXCLUDED.description,
       is_active = EXCLUDED.is_active;
 
@@ -63,82 +83,252 @@ SELECT r.id, p.id
   )
 ON CONFLICT DO NOTHING;
 
--- Asignaturas oficiales MPPE + Especialidades Técnicas (Telemática, Aduanas, Turismo)
+-- Áreas de Formación oficiales MPPE (Transformación Curricular Escuelas Técnicas)
 INSERT INTO public.subjects (code, name, grading_scale, passing_threshold, is_technical_core)
 VALUES
-  -- Formación Común MPPE
-  ('CAS', 'Castellano y Literatura', 'NUMERIC_1_20', 10, false),
+  -- Formación General (y transversal)
+  ('LYL', 'Lengua y Literatura', 'NUMERIC_1_20', 10, false),
   ('MAT', 'Matemática', 'NUMERIC_1_20', 10, false),
-  ('ING', 'Inglés Técnico y General', 'NUMERIC_1_20', 10, false),
-  ('GHC', 'Geografía, Historia y Ciudadanía', 'NUMERIC_1_20', 10, false),
+  ('IDI', 'Idiomas', 'NUMERIC_1_20', 10, false),
   ('EDF', 'Educación Física', 'NUMERIC_1_20', 10, false),
-  ('CNAT', 'Ciencias Naturales / Biología', 'NUMERIC_1_20', 10, false),
-  ('FIS', 'Física Aplicada', 'NUMERIC_1_20', 10, false),
-  ('QUI', 'Química Aplicada', 'NUMERIC_1_20', 10, false),
-  ('FSN', 'Formación para la Soberanía Nacional', 'NUMERIC_1_20', 10, false),
-  ('CRP', 'Grupo de Creación, Recreación y Producción (CRP)', 'LITERAL_A_E', 10, false),
+  ('BAT', 'Biología, Ambiente y Tecnología', 'NUMERIC_1_20', 10, false),
+  ('GHSN', 'Geografía, Historia y Soberanía Nacional', 'NUMERIC_1_20', 10, false),
 
-  -- Mención Telemática
-  ('TEL-OFI', 'Fundamentos de Cómputo y Ofimática', 'NUMERIC_1_20', 10, true),
-  ('TEL-ARQ', 'Arquitectura de Hardware y Electrónica Básica', 'NUMERIC_1_20', 10, true),
-  ('TEL-ALG', 'Algoritmos y Programación', 'NUMERIC_1_20', 10, true),
-  ('TEL-RED', 'Redes de Datos, Protocolos OSI/TCP-IP y Cableado', 'NUMERIC_1_20', 10, true),
-  ('TEL-BDD', 'Bases de Datos SQL y Desarrollo Web', 'NUMERIC_1_20', 10, true),
-  ('TEL-SEG', 'Seguridad LAN, Servidores y Pasantías TI', 'NUMERIC_1_20', 10, true),
+  -- Formación Científica, Tecnológica y Productiva
+  ('PEST', 'Proyecto de Economía Socioproductiva y Tecnología', 'NUMERIC_1_20', 10, true),
+  ('ADU-FTA', 'Fundamentos y Técnicas de Aduana', 'NUMERIC_1_20', 10, true),
+  ('TUR-GSTH', 'Gestión y Administración de Servicios Turísticos y Hoteleros', 'NUMERIC_1_20', 10, true),
+  ('TEL-PDSR', 'Programación y Diseño de Software y Redes', 'NUMERIC_1_20', 10, true),
 
-  -- Mención Aduanas
-  ('ADU-COM', 'Iniciación Comercial y Geografía del Orinoco', 'NUMERIC_1_20', 10, true),
-  ('ADU-CON', 'Contabilidad General y Legislación Mercantil', 'NUMERIC_1_20', 10, true),
-  ('ADU-POT', 'Potestad Aduanera e Inglés Comercial', 'NUMERIC_1_20', 10, true),
-  ('ADU-ARA', 'Clasificación Arancelaria (Sistema Armonizado)', 'NUMERIC_1_20', 10, true),
-  ('ADU-VAL', 'Valoración CIF/FOB, Incoterms y Documentos B/L', 'NUMERIC_1_20', 10, true),
-  ('ADU-REG', 'Regímenes Especiales y Práctica Aduanal', 'NUMERIC_1_20', 10, true),
-
-  -- Mención Turismo
-  ('TUR-PAT', 'Patrimonio Guayanés, Ecología y Anfitrionía', 'NUMERIC_1_20', 10, true),
-  ('TUR-SIS', 'Sistema Turístico y Geografía de Bolívar', 'NUMERIC_1_20', 10, true),
-  ('TUR-ING', 'Inglés Turístico y Atención Bilingüe', 'NUMERIC_1_20', 10, true),
-  ('TUR-GUI', 'Técnicas de Guiatura Interpretativa y Rutas', 'NUMERIC_1_20', 10, true),
-  ('TUR-HOT', 'Alojamiento, Recepción Hotelera y Eventos', 'NUMERIC_1_20', 10, true),
-  ('TUR-ECO', 'Ecoturismo Digital y Gestión de Operadoras', 'NUMERIC_1_20', 10, true)
+  -- Práctica Vocacional y Profesional
+  ('OVS', 'Orientación y Vinculación Sociolaboral', 'NUMERIC_1_20', 10, false),
+  ('PPRO', 'Práctica Profesional', 'NUMERIC_1_20', 10, true)
 ON CONFLICT (code) DO UPDATE
   SET name = EXCLUDED.name,
       grading_scale = EXCLUDED.grading_scale,
       passing_threshold = EXCLUDED.passing_threshold,
       is_technical_core = EXCLUDED.is_technical_core;
 
--- Malla curricular completa de 1.º a 6.º año para las 3 menciones
-WITH plan(mencion_code, grade_year, subject_code, weekly_hours) AS (
+-- Planes de Estudio oficiales completos (1.º a 6.º año) para las 3 menciones
+-- Carga semanal: 1.º y 2.º = 40 h/sem · 3.º, 4.º y 5.º = 42 h/sem · 6.º = 1440 h/año escolar
+WITH plan(mencion_code, grade_year, subject_code, weekly_hours, annual_hours, curriculum_component, display_order) AS (
   VALUES
-    -- TELEMÁTICA (1.º a 6.º)
-    ('TELEMATICA', 1, 'CAS', 4), ('TELEMATICA', 1, 'MAT', 4), ('TELEMATICA', 1, 'ING', 3), ('TELEMATICA', 1, 'GHC', 4), ('TELEMATICA', 1, 'CNAT', 4), ('TELEMATICA', 1, 'TEL-OFI', 4), ('TELEMATICA', 1, 'CRP', 2),
-    ('TELEMATICA', 2, 'CAS', 4), ('TELEMATICA', 2, 'MAT', 4), ('TELEMATICA', 2, 'ING', 3), ('TELEMATICA', 2, 'GHC', 4), ('TELEMATICA', 2, 'CNAT', 4), ('TELEMATICA', 2, 'TEL-OFI', 4), ('TELEMATICA', 2, 'CRP', 2),
-    ('TELEMATICA', 3, 'CAS', 4), ('TELEMATICA', 3, 'MAT', 4), ('TELEMATICA', 3, 'ING', 3), ('TELEMATICA', 3, 'FIS', 4), ('TELEMATICA', 3, 'TEL-ARQ', 4), ('TELEMATICA', 3, 'TEL-ALG', 4), ('TELEMATICA', 3, 'CRP', 2),
-    ('TELEMATICA', 4, 'CAS', 3), ('TELEMATICA', 4, 'MAT', 4), ('TELEMATICA', 4, 'ING', 3), ('TELEMATICA', 4, 'FSN', 2), ('TELEMATICA', 4, 'TEL-RED', 6), ('TELEMATICA', 4, 'TEL-ALG', 4), ('TELEMATICA', 4, 'CRP', 2),
-    ('TELEMATICA', 5, 'MAT', 4), ('TELEMATICA', 5, 'ING', 3), ('TELEMATICA', 5, 'FSN', 2), ('TELEMATICA', 5, 'TEL-RED', 5), ('TELEMATICA', 5, 'TEL-BDD', 6), ('TELEMATICA', 5, 'EDF', 2), ('TELEMATICA', 5, 'CRP', 2),
-    ('TELEMATICA', 6, 'ING', 3), ('TELEMATICA', 6, 'GHC', 2), ('TELEMATICA', 6, 'TEL-BDD', 5), ('TELEMATICA', 6, 'TEL-SEG', 8), ('TELEMATICA', 6, 'EDF', 2), ('TELEMATICA', 6, 'CRP', 2),
+    -- ========================================================================
+    -- ESPECIALIDAD: ECONOMÍA SOCIAL · MENCIÓN: ADUANA
+    -- ========================================================================
+    -- 1.º Año (40 h/sem)
+    ('ADUANAS', 1, 'LYL',     3,  NULL, 'formacion_general',                1),
+    ('ADUANAS', 1, 'MAT',     4,  NULL, 'formacion_general',                2),
+    ('ADUANAS', 1, 'IDI',     3,  NULL, 'formacion_general',                3),
+    ('ADUANAS', 1, 'EDF',     2,  NULL, 'formacion_general',                4),
+    ('ADUANAS', 1, 'BAT',     4,  NULL, 'formacion_general',                5),
+    ('ADUANAS', 1, 'GHSN',    4,  NULL, 'formacion_general',                6),
+    ('ADUANAS', 1, 'PEST',    8,  NULL, 'formacion_cientifica_tecnologica', 7),
+    ('ADUANAS', 1, 'ADU-FTA', 8,  NULL, 'formacion_cientifica_tecnologica', 8),
+    ('ADUANAS', 1, 'OVS',     4,  NULL, 'practica_vocacional_profesional',  9),
 
-    -- ADUANAS (1.º a 6.º)
-    ('ADUANAS', 1, 'CAS', 4), ('ADUANAS', 1, 'MAT', 4), ('ADUANAS', 1, 'ING', 3), ('ADUANAS', 1, 'GHC', 4), ('ADUANAS', 1, 'CNAT', 4), ('ADUANAS', 1, 'ADU-COM', 4), ('ADUANAS', 1, 'CRP', 2),
-    ('ADUANAS', 2, 'CAS', 4), ('ADUANAS', 2, 'MAT', 4), ('ADUANAS', 2, 'ING', 3), ('ADUANAS', 2, 'GHC', 4), ('ADUANAS', 2, 'ADU-COM', 4), ('ADUANAS', 2, 'ADU-CON', 4), ('ADUANAS', 2, 'CRP', 2),
-    ('ADUANAS', 3, 'CAS', 4), ('ADUANAS', 3, 'MAT', 4), ('ADUANAS', 3, 'ING', 3), ('ADUANAS', 3, 'QUI', 3), ('ADUANAS', 3, 'ADU-CON', 4), ('ADUANAS', 3, 'ADU-POT', 4), ('ADUANAS', 3, 'CRP', 2),
-    ('ADUANAS', 4, 'CAS', 3), ('ADUANAS', 4, 'MAT', 4), ('ADUANAS', 4, 'FSN', 2), ('ADUANAS', 4, 'ADU-POT', 5), ('ADUANAS', 4, 'ADU-ARA', 6), ('ADUANAS', 4, 'EDF', 2), ('ADUANAS', 4, 'CRP', 2),
-    ('ADUANAS', 5, 'MAT', 4), ('ADUANAS', 5, 'ING', 3), ('ADUANAS', 5, 'FSN', 2), ('ADUANAS', 5, 'ADU-ARA', 5), ('ADUANAS', 5, 'ADU-VAL', 6), ('ADUANAS', 5, 'EDF', 2), ('ADUANAS', 5, 'CRP', 2),
-    ('ADUANAS', 6, 'ING', 3), ('ADUANAS', 6, 'GHC', 2), ('ADUANAS', 6, 'ADU-VAL', 5), ('ADUANAS', 6, 'ADU-REG', 8), ('ADUANAS', 6, 'EDF', 2), ('ADUANAS', 6, 'CRP', 2),
+    -- 2.º Año (40 h/sem)
+    ('ADUANAS', 2, 'LYL',     3,  NULL, 'formacion_general',                1),
+    ('ADUANAS', 2, 'MAT',     4,  NULL, 'formacion_general',                2),
+    ('ADUANAS', 2, 'IDI',     3,  NULL, 'formacion_general',                3),
+    ('ADUANAS', 2, 'EDF',     2,  NULL, 'formacion_general',                4),
+    ('ADUANAS', 2, 'BAT',     4,  NULL, 'formacion_general',                5),
+    ('ADUANAS', 2, 'GHSN',    4,  NULL, 'formacion_general',                6),
+    ('ADUANAS', 2, 'PEST',    8,  NULL, 'formacion_cientifica_tecnologica', 7),
+    ('ADUANAS', 2, 'ADU-FTA', 8,  NULL, 'formacion_cientifica_tecnologica', 8),
+    ('ADUANAS', 2, 'OVS',     4,  NULL, 'practica_vocacional_profesional',  9),
 
-    -- TURISMO (1.º a 6.º)
-    ('TURISMO', 1, 'CAS', 4), ('TURISMO', 1, 'MAT', 4), ('TURISMO', 1, 'ING', 3), ('TURISMO', 1, 'GHC', 4), ('TURISMO', 1, 'CNAT', 4), ('TURISMO', 1, 'TUR-PAT', 4), ('TURISMO', 1, 'CRP', 2),
-    ('TURISMO', 2, 'CAS', 4), ('TURISMO', 2, 'MAT', 4), ('TURISMO', 2, 'ING', 3), ('TURISMO', 2, 'GHC', 4), ('TURISMO', 2, 'TUR-PAT', 4), ('TURISMO', 2, 'TUR-SIS', 4), ('TURISMO', 2, 'CRP', 2),
-    ('TURISMO', 3, 'CAS', 4), ('TURISMO', 3, 'MAT', 4), ('TURISMO', 3, 'GHC', 4), ('TURISMO', 3, 'TUR-SIS', 4), ('TURISMO', 3, 'TUR-ING', 5), ('TURISMO', 3, 'EDF', 2), ('TURISMO', 3, 'CRP', 2),
-    ('TURISMO', 4, 'CAS', 3), ('TURISMO', 4, 'FSN', 2), ('TURISMO', 4, 'TUR-ING', 4), ('TURISMO', 4, 'TUR-GUI', 6), ('TURISMO', 4, 'TUR-HOT', 5), ('TURISMO', 4, 'EDF', 2), ('TURISMO', 4, 'CRP', 2),
-    ('TURISMO', 5, 'MAT', 3), ('TURISMO', 5, 'FSN', 2), ('TURISMO', 5, 'TUR-ING', 4), ('TURISMO', 5, 'TUR-GUI', 5), ('TURISMO', 5, 'TUR-HOT', 6), ('TURISMO', 5, 'EDF', 2), ('TURISMO', 5, 'CRP', 2),
-    ('TURISMO', 6, 'GHC', 2), ('TURISMO', 6, 'TUR-ING', 4), ('TURISMO', 6, 'TUR-HOT', 5), ('TURISMO', 6, 'TUR-ECO', 8), ('TURISMO', 6, 'EDF', 2), ('TURISMO', 6, 'CRP', 2)
+    -- 3.º Año (42 h/sem)
+    ('ADUANAS', 3, 'LYL',     4,  NULL, 'formacion_general',                1),
+    ('ADUANAS', 3, 'MAT',     4,  NULL, 'formacion_general',                2),
+    ('ADUANAS', 3, 'IDI',     4,  NULL, 'formacion_general',                3),
+    ('ADUANAS', 3, 'EDF',     2,  NULL, 'formacion_general',                4),
+    ('ADUANAS', 3, 'BAT',     8,  NULL, 'formacion_general',                5),
+    ('ADUANAS', 3, 'GHSN',    2,  NULL, 'formacion_general',                6),
+    ('ADUANAS', 3, 'PEST',    8,  NULL, 'formacion_cientifica_tecnologica', 7),
+    ('ADUANAS', 3, 'ADU-FTA', 8,  NULL, 'formacion_cientifica_tecnologica', 8),
+    ('ADUANAS', 3, 'OVS',     2,  NULL, 'practica_vocacional_profesional',  9),
+
+    -- 4.º Año (42 h/sem)
+    ('ADUANAS', 4, 'LYL',     4,  NULL, 'formacion_general',                1),
+    ('ADUANAS', 4, 'MAT',     4,  NULL, 'formacion_general',                2),
+    ('ADUANAS', 4, 'IDI',     4,  NULL, 'formacion_general',                3),
+    ('ADUANAS', 4, 'BAT',     8,  NULL, 'formacion_general',                5),
+    ('ADUANAS', 4, 'GHSN',    2,  NULL, 'formacion_general',                6),
+    ('ADUANAS', 4, 'PEST',    8,  NULL, 'formacion_cientifica_tecnologica', 7),
+    ('ADUANAS', 4, 'ADU-FTA', 10, NULL, 'formacion_cientifica_tecnologica', 8),
+    ('ADUANAS', 4, 'OVS',     2,  NULL, 'practica_vocacional_profesional',  9),
+
+    -- 5.º Año (42 h/sem)
+    ('ADUANAS', 5, 'LYL',     4,  NULL, 'formacion_general',                1),
+    ('ADUANAS', 5, 'MAT',     4,  NULL, 'formacion_general',                2),
+    ('ADUANAS', 5, 'IDI',     4,  NULL, 'formacion_general',                3),
+    ('ADUANAS', 5, 'BAT',     8,  NULL, 'formacion_general',                5),
+    ('ADUANAS', 5, 'GHSN',    2,  NULL, 'formacion_general',                6),
+    ('ADUANAS', 5, 'PEST',    8,  NULL, 'formacion_cientifica_tecnologica', 7),
+    ('ADUANAS', 5, 'ADU-FTA', 10, NULL, 'formacion_cientifica_tecnologica', 8),
+    ('ADUANAS', 5, 'OVS',     2,  NULL, 'practica_vocacional_profesional',  9),
+
+    -- 6.º Año (1440 h año escolar)
+    ('ADUANAS', 6, 'PPRO',    0,  1440, 'practica_vocacional_profesional',  10),
+
+    -- ========================================================================
+    -- ESPECIALIDAD: ECONOMÍA SOCIAL · MENCIÓN: TURISMO
+    -- ========================================================================
+    -- 1.º Año (40 h/sem)
+    ('TURISMO', 1, 'LYL',      3, NULL, 'formacion_general',                1),
+    ('TURISMO', 1, 'MAT',      4, NULL, 'formacion_general',                2),
+    ('TURISMO', 1, 'EDF',      2, NULL, 'formacion_general',                3),
+    ('TURISMO', 1, 'BAT',      4, NULL, 'formacion_general',                4),
+    ('TURISMO', 1, 'GHSN',     4, NULL, 'formacion_general',                5),
+    ('TURISMO', 1, 'PEST',     8, NULL, 'formacion_cientifica_tecnologica', 6),
+    ('TURISMO', 1, 'TUR-GSTH', 8, NULL, 'formacion_cientifica_tecnologica', 7),
+    ('TURISMO', 1, 'IDI',      3, NULL, 'formacion_cientifica_tecnologica', 8),
+    ('TURISMO', 1, 'OVS',      4, NULL, 'practica_vocacional_profesional',  9),
+
+    -- 2.º Año (40 h/sem)
+    ('TURISMO', 2, 'LYL',      3, NULL, 'formacion_general',                1),
+    ('TURISMO', 2, 'MAT',      4, NULL, 'formacion_general',                2),
+    ('TURISMO', 2, 'EDF',      2, NULL, 'formacion_general',                3),
+    ('TURISMO', 2, 'BAT',      4, NULL, 'formacion_general',                4),
+    ('TURISMO', 2, 'GHSN',     4, NULL, 'formacion_general',                5),
+    ('TURISMO', 2, 'PEST',     8, NULL, 'formacion_cientifica_tecnologica', 6),
+    ('TURISMO', 2, 'TUR-GSTH', 8, NULL, 'formacion_cientifica_tecnologica', 7),
+    ('TURISMO', 2, 'IDI',      3, NULL, 'formacion_cientifica_tecnologica', 8),
+    ('TURISMO', 2, 'OVS',      4, NULL, 'practica_vocacional_profesional',  9),
+
+    -- 3.º Año (42 h/sem)
+    ('TURISMO', 3, 'LYL',      4, NULL, 'formacion_general',                1),
+    ('TURISMO', 3, 'MAT',      4, NULL, 'formacion_general',                2),
+    ('TURISMO', 3, 'EDF',      2, NULL, 'formacion_general',                3),
+    ('TURISMO', 3, 'BAT',      8, NULL, 'formacion_general',                4),
+    ('TURISMO', 3, 'GHSN',     2, NULL, 'formacion_general',                5),
+    ('TURISMO', 3, 'PEST',     8, NULL, 'formacion_cientifica_tecnologica', 6),
+    ('TURISMO', 3, 'TUR-GSTH', 8, NULL, 'formacion_cientifica_tecnologica', 7),
+    ('TURISMO', 3, 'IDI',      4, NULL, 'formacion_cientifica_tecnologica', 8),
+    ('TURISMO', 3, 'OVS',      2, NULL, 'practica_vocacional_profesional',  9),
+
+    -- 4.º Año (42 h/sem)
+    ('TURISMO', 4, 'LYL',      4, NULL, 'formacion_general',                1),
+    ('TURISMO', 4, 'MAT',      4, NULL, 'formacion_general',                2),
+    ('TURISMO', 4, 'BAT',      8, NULL, 'formacion_general',                4),
+    ('TURISMO', 4, 'GHSN',     2, NULL, 'formacion_general',                5),
+    ('TURISMO', 4, 'PEST',     8, NULL, 'formacion_cientifica_tecnologica', 6),
+    ('TURISMO', 4, 'TUR-GSTH', 8, NULL, 'formacion_cientifica_tecnologica', 7),
+    ('TURISMO', 4, 'IDI',      6, NULL, 'formacion_cientifica_tecnologica', 8),
+    ('TURISMO', 4, 'OVS',      2, NULL, 'practica_vocacional_profesional',  9),
+
+    -- 5.º Año (42 h/sem)
+    ('TURISMO', 5, 'LYL',      4, NULL, 'formacion_general',                1),
+    ('TURISMO', 5, 'MAT',      4, NULL, 'formacion_general',                2),
+    ('TURISMO', 5, 'BAT',      8, NULL, 'formacion_general',                4),
+    ('TURISMO', 5, 'GHSN',     2, NULL, 'formacion_general',                5),
+    ('TURISMO', 5, 'PEST',     8, NULL, 'formacion_cientifica_tecnologica', 6),
+    ('TURISMO', 5, 'TUR-GSTH', 8, NULL, 'formacion_cientifica_tecnologica', 7),
+    ('TURISMO', 5, 'IDI',      6, NULL, 'formacion_cientifica_tecnologica', 8),
+    ('TURISMO', 5, 'OVS',      2, NULL, 'practica_vocacional_profesional',  9),
+
+    -- 6.º Año (1440 h año escolar)
+    ('TURISMO', 6, 'PPRO',     0, 1440, 'practica_vocacional_profesional',  10),
+
+    -- ========================================================================
+    -- ESPECIALIDAD: INDUSTRIAL · MENCIÓN: TELEMÁTICA
+    -- ========================================================================
+    -- 1.º Año (40 h/sem)
+    ('TELEMATICA', 1, 'LYL',      3,  NULL, 'formacion_general',                1),
+    ('TELEMATICA', 1, 'MAT',      4,  NULL, 'formacion_general',                2),
+    ('TELEMATICA', 1, 'IDI',      3,  NULL, 'formacion_general',                3),
+    ('TELEMATICA', 1, 'EDF',      2,  NULL, 'formacion_general',                4),
+    ('TELEMATICA', 1, 'BAT',      4,  NULL, 'formacion_general',                5),
+    ('TELEMATICA', 1, 'GHSN',     4,  NULL, 'formacion_general',                6),
+    ('TELEMATICA', 1, 'PEST',     8,  NULL, 'formacion_cientifica_tecnologica', 7),
+    ('TELEMATICA', 1, 'TEL-PDSR', 8,  NULL, 'formacion_cientifica_tecnologica', 8),
+    ('TELEMATICA', 1, 'OVS',      4,  NULL, 'practica_vocacional_profesional',  9),
+
+    -- 2.º Año (40 h/sem)
+    ('TELEMATICA', 2, 'LYL',      3,  NULL, 'formacion_general',                1),
+    ('TELEMATICA', 2, 'MAT',      4,  NULL, 'formacion_general',                2),
+    ('TELEMATICA', 2, 'IDI',      3,  NULL, 'formacion_general',                3),
+    ('TELEMATICA', 2, 'EDF',      2,  NULL, 'formacion_general',                4),
+    ('TELEMATICA', 2, 'BAT',      4,  NULL, 'formacion_general',                5),
+    ('TELEMATICA', 2, 'GHSN',     4,  NULL, 'formacion_general',                6),
+    ('TELEMATICA', 2, 'PEST',     8,  NULL, 'formacion_cientifica_tecnologica', 7),
+    ('TELEMATICA', 2, 'TEL-PDSR', 8,  NULL, 'formacion_cientifica_tecnologica', 8),
+    ('TELEMATICA', 2, 'OVS',      4,  NULL, 'practica_vocacional_profesional',  9),
+
+    -- 3.º Año (42 h/sem)
+    ('TELEMATICA', 3, 'LYL',      4,  NULL, 'formacion_general',                1),
+    ('TELEMATICA', 3, 'MAT',      4,  NULL, 'formacion_general',                2),
+    ('TELEMATICA', 3, 'IDI',      4,  NULL, 'formacion_general',                3),
+    ('TELEMATICA', 3, 'EDF',      2,  NULL, 'formacion_general',                4),
+    ('TELEMATICA', 3, 'BAT',      8,  NULL, 'formacion_general',                5),
+    ('TELEMATICA', 3, 'GHSN',     2,  NULL, 'formacion_general',                6),
+    ('TELEMATICA', 3, 'PEST',     8,  NULL, 'formacion_cientifica_tecnologica', 7),
+    ('TELEMATICA', 3, 'TEL-PDSR', 8,  NULL, 'formacion_cientifica_tecnologica', 8),
+    ('TELEMATICA', 3, 'OVS',      2,  NULL, 'practica_vocacional_profesional',  9),
+
+    -- 4.º Año (42 h/sem)
+    ('TELEMATICA', 4, 'LYL',      4,  NULL, 'formacion_general',                1),
+    ('TELEMATICA', 4, 'MAT',      4,  NULL, 'formacion_general',                2),
+    ('TELEMATICA', 4, 'IDI',      4,  NULL, 'formacion_general',                3),
+    ('TELEMATICA', 4, 'BAT',      8,  NULL, 'formacion_general',                5),
+    ('TELEMATICA', 4, 'GHSN',     2,  NULL, 'formacion_general',                6),
+    ('TELEMATICA', 4, 'PEST',     8,  NULL, 'formacion_cientifica_tecnologica', 7),
+    ('TELEMATICA', 4, 'TEL-PDSR', 10, NULL, 'formacion_cientifica_tecnologica', 8),
+    ('TELEMATICA', 4, 'OVS',      2,  NULL, 'practica_vocacional_profesional',  9),
+
+    -- 5.º Año (42 h/sem)
+    ('TELEMATICA', 5, 'LYL',      4,  NULL, 'formacion_general',                1),
+    ('TELEMATICA', 5, 'MAT',      4,  NULL, 'formacion_general',                2),
+    ('TELEMATICA', 5, 'IDI',      4,  NULL, 'formacion_general',                3),
+    ('TELEMATICA', 5, 'BAT',      8,  NULL, 'formacion_general',                5),
+    ('TELEMATICA', 5, 'GHSN',     2,  NULL, 'formacion_general',                6),
+    ('TELEMATICA', 5, 'PEST',     8,  NULL, 'formacion_cientifica_tecnologica', 7),
+    ('TELEMATICA', 5, 'TEL-PDSR', 10, NULL, 'formacion_cientifica_tecnologica', 8),
+    ('TELEMATICA', 5, 'OVS',      2,  NULL, 'practica_vocacional_profesional',  9),
+
+    -- 6.º Año (1440 h año escolar)
+    ('TELEMATICA', 6, 'PPRO',     0,  1440, 'practica_vocacional_profesional',  10)
 )
-INSERT INTO public.curriculum_subjects (mencion_id, subject_id, grade_year, weekly_hours, is_active)
-SELECT m.id, s.id, p.grade_year, p.weekly_hours, true
+INSERT INTO public.curriculum_subjects (
+  mencion_id,
+  subject_id,
+  grade_year,
+  weekly_hours,
+  annual_hours,
+  curriculum_component,
+  display_order,
+  is_active
+)
+SELECT
+  m.id,
+  s.id,
+  p.grade_year,
+  p.weekly_hours,
+  p.annual_hours,
+  p.curriculum_component,
+  p.display_order,
+  true
   FROM plan p
   JOIN public.menciones m ON m.code = p.mencion_code
   JOIN public.subjects s ON s.code = p.subject_code
 ON CONFLICT (mencion_id, subject_id, grade_year) DO UPDATE
   SET weekly_hours = EXCLUDED.weekly_hours,
+      annual_hours = EXCLUDED.annual_hours,
+      curriculum_component = EXCLUDED.curriculum_component,
+      display_order = EXCLUDED.display_order,
       is_active = true;
+
+-- Bucket institucional de fotografías de perfil / carnet (.webp <= 512 KB)
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'student-avatars',
+  'student-avatars',
+  true,
+  524288,
+  ARRAY['image/webp']
+)
+ON CONFLICT (id) DO UPDATE
+  SET public = EXCLUDED.public,
+      file_size_limit = EXCLUDED.file_size_limit,
+      allowed_mime_types = EXCLUDED.allowed_mime_types;

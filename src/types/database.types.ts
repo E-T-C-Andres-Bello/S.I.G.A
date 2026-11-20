@@ -496,7 +496,10 @@ export type Database = {
       }
       curriculum_subjects: {
         Row: {
+          annual_hours: number | null
           created_at: string
+          curriculum_component: string
+          display_order: number
           grade_year: number
           id: string
           is_active: boolean
@@ -505,7 +508,10 @@ export type Database = {
           weekly_hours: number
         }
         Insert: {
+          annual_hours?: number | null
           created_at?: string
+          curriculum_component?: string
+          display_order?: number
           grade_year: number
           id?: string
           is_active?: boolean
@@ -514,7 +520,10 @@ export type Database = {
           weekly_hours?: number
         }
         Update: {
+          annual_hours?: number | null
           created_at?: string
+          curriculum_component?: string
+          display_order?: number
           grade_year?: number
           id?: string
           is_active?: boolean
@@ -1329,6 +1338,7 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          specialty: string | null
         }
         Insert: {
           code: string
@@ -1337,6 +1347,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          specialty?: string | null
         }
         Update: {
           code?: string
@@ -1345,6 +1356,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          specialty?: string | null
         }
         Relationships: []
       }
@@ -1983,6 +1995,48 @@ export type Database = {
           module?: string
         }
         Relationships: []
+      }
+      profile_audit_logs: {
+        Row: {
+          action: string
+          actor_user_id: string
+          changed_fields: string[]
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          actor_user_id: string
+          changed_fields?: string[]
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string
+          changed_fields?: string[]
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_audit_logs_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profile_audit_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rag_material_chunks: {
         Row: {
@@ -2749,8 +2803,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      siga_actualizar_avatar_estudiante: {
+        Args: { p_avatar_webp_url?: string | null }
+        Returns: Json
+      }
       siga_actualizar_correo_recuperacion: {
         Args: { p_recovery_email: string }
+        Returns: Json
+      }
+      siga_actualizar_perfil_estudiante: {
+        Args: {
+          p_emergency_contact_cedula?: string | null
+          p_emergency_contact_name?: string | null
+          p_emergency_contact_phone?: string | null
+          p_emergency_contact_relationship?: string | null
+          p_phone?: string | null
+          p_recovery_email?: string | null
+        }
         Returns: Json
       }
       siga_cancelar_solicitud_estudiante: {
@@ -2828,6 +2897,22 @@ export type Database = {
           teacher_name: string
         }[]
       }
+      siga_get_student_attendance_overview: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      siga_get_student_section_absence_alerts: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          absence_date: string
+          absence_id: string
+          affected_blocks: Json
+          status: string
+          subject_codes: string[]
+          subject_names: string[]
+          teacher_name: string
+        }[]
+      }
       siga_get_student_subject_telemetry: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -2840,6 +2925,14 @@ export type Database = {
           teacher_name: string | null
           total_sessions: number
         }[]
+      }
+      siga_marcar_notificacion_leida: {
+        Args: { p_is_read?: boolean; p_notification_id: string }
+        Returns: Json
+      }
+      siga_marcar_todas_notificaciones_leidas: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
       }
       siga_match_rag_chunks: {
         Args: {

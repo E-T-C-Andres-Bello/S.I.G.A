@@ -60,6 +60,13 @@ export default async function AulaVirtualCourseStandalonePage({
     redirect(ROLE_HOME_PATH[profile.primaryRole] ?? "/");
   }
 
+  if (
+    profile.primaryRole === "estudiante" &&
+    profile.accessTier !== "verified_workspace"
+  ) {
+    redirect("/estudiante");
+  }
+
   const cleanCode = decodeURIComponent(resolvedParams.courseId)
     .trim()
     .toUpperCase();

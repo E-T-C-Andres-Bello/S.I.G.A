@@ -35,7 +35,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getCurriculumStatusLabel } from "@/features/estudiante/curriculum-tracks";
+import {
+  formatCurriculumWorkload,
+  getCurriculumStatusLabel,
+} from "@/features/estudiante/curriculum-tracks";
 import type { StudentSubjectDetailData } from "@/features/estudiante/subjects-data";
 
 export interface StudentSubjectDetailViewProps {
@@ -72,11 +75,10 @@ export function StudentSubjectDetailView({
 
   const reviewRequestHref = React.useMemo(() => {
     const params = new URLSearchParams({
-      tab: "tramites",
       requestType: "revision_notas",
       subject: `${subject.subjectName} (${subject.subjectCode})`,
     });
-    return `/estudiante?${params.toString()}`;
+    return `/estudiante/tramites?${params.toString()}`;
   }, [subject.subjectCode, subject.subjectName]);
 
   const activeGradeLabel = React.useMemo(() => {
@@ -213,7 +215,13 @@ export function StudentSubjectDetailView({
               Intensidad horaria
             </span>
             <p className="font-kpi-num mt-1.5 text-lg font-light text-white tabular-nums">
-              {subject.weeklyHours ?? "—"} h / semana
+              {subject.weeklyHours !== null
+                ? formatCurriculumWorkload(
+                    subject.weeklyHours,
+                    subject.annualHours,
+                    "long"
+                  )
+                : "—"}
             </p>
           </div>
 

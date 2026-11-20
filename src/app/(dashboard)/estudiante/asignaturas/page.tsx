@@ -27,9 +27,15 @@ export default async function EstudianteAsignaturasPage({
     redirect(ROLE_HOME_PATH[profile.primaryRole] ?? "/");
   }
 
+  if (profile.accessTier !== "verified_workspace") {
+    redirect("/estudiante");
+  }
+
   const data = await getStudentCurriculumOverviewData(profile);
   const initialSubsection =
-    params.vista === "mapa" ? "mapa" : "asignaturas";
+    params.vista === "mapa" || params.vista === "historial"
+      ? "mapa"
+      : "asignaturas";
 
   return (
     <StudentCurriculumHubView
