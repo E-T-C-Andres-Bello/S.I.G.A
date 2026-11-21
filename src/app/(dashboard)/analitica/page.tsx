@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { RoleGenericDashboardView } from "@/components/dashboard/RoleGenericDashboardView";
+import { AnaliticaDashboardView } from "@/components/analitica/AnaliticaDashboardView";
+import { getInstitutionalAnalyticsData } from "@/features/analitica/server";
 import { getAuthenticatedDashboardContext } from "@/lib/supabase/dashboard-session";
 
 export const metadata: Metadata = {
@@ -33,11 +34,13 @@ function getCaracasTimeContext(): { todayIso: string; greeting: string } {
 export default async function AnaliticaHomePage() {
   const profile = await getAuthenticatedDashboardContext();
   const { todayIso, greeting } = getCaracasTimeContext();
+  const analyticsResult = await getInstitutionalAnalyticsData(profile);
 
   return (
-    <RoleGenericDashboardView
+    <AnaliticaDashboardView
       profile={profile}
-      workspaceKey="analitica"
+      initialData={analyticsResult.ok ? analyticsResult.data : null}
+      initialError={analyticsResult.ok ? null : analyticsResult.message}
       todayIso={todayIso}
       greeting={greeting}
     />

@@ -6,11 +6,14 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import {
+  BarChart3,
   Bell,
   BookOpenCheck,
   CalendarCheck2,
+  ClipboardList,
   FileText,
   Home,
+  Layers,
   Loader2,
   LogOut,
   Moon,
@@ -246,6 +249,42 @@ export function DashboardSidebar({
           icon: FileText,
         }
       );
+    }
+
+    if (
+      (profile.primaryRole === "direccion" ||
+        profile.primaryRole === "control_estudios" ||
+        profile.primaryRole === "coordinador_mencion") &&
+      isVerifiedWorkspace
+    ) {
+      if (profile.primaryRole !== "direccion") {
+        items.push({
+          id: "analitica",
+          label: "Analítica BI",
+          href: "/analitica",
+          icon: BarChart3,
+        });
+      }
+      if (
+        profile.primaryRole === "coordinador_mencion" ||
+        profile.primaryRole === "direccion" ||
+        profile.primaryRole === "control_estudios"
+      ) {
+        items.push({
+          id: "coord-mencion",
+          label: "Coord. Mención",
+          href: "/analitica/mencion",
+          icon: Layers,
+        });
+      }
+      if (profile.primaryRole === "direccion") {
+        items.push({
+          id: "control-estudios",
+          label: "Control de Estudios",
+          href: "/control-estudios",
+          icon: ClipboardList,
+        });
+      }
     }
 
     return items;
