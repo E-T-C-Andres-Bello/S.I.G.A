@@ -7,55 +7,44 @@ import {
   ArrowUpRight,
   Award,
   BookOpen,
-  Calculator,
   Calendar,
   CalendarClock,
   CheckCircle2,
   ClipboardList,
   Clock,
-  FileText,
   GraduationCap,
   QrCode,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "cn";
-import { StudentGradeSimulator } from "@/components/estudiante/StudentGradeSimulator";
+import { StudentFullCalendarDialog } from "@/components/estudiante/StudentFullCalendarDialog";
 import { StudentMedalsStrip } from "@/components/estudiante/StudentMedalsStrip";
 import { StudentSchedulePanel } from "@/components/estudiante/StudentSchedulePanel";
-import { StudentTramitesView } from "@/components/estudiante/StudentTramitesView";
+import { TodaySchoolPulseCard } from "@/components/estudiante/TodaySchoolPulseCard";
 import { StudentCarnetView } from "@/components/qr/StudentCarnetView";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { StudentDashboardData } from "@/features/estudiante/dashboard-data";
 import type { StudentCarnetTokenPayload } from "@/features/estudiante/student-actions";
-import type { StudentTramitesData } from "@/features/estudiante/tramites-data";
 import type { DashboardUserProfile } from "@/lib/supabase/dashboard-session";
+import { formatVenezuelanCedulaDisplay } from "@/lib/validators/auth";
 import { CountUp, SigaAnalyticsBento } from "./SigaAnalyticsBento";
 
-export type StudentPortalTab =
-  | "resumen"
-  | "horario"
-  | "simulador"
-  | "carnet"
-  | "tramites";
+export type StudentPortalTab = "resumen" | "horario" | "carnet";
 
 export interface StudentDashboardViewProps {
   profile: DashboardUserProfile;
   data: StudentDashboardData;
-  tramitesData: StudentTramitesData;
   initialCarnetToken?: StudentCarnetTokenPayload | null;
   initialCarnetError?: string | null;
   /** Fecha actual ISO (`YYYY-MM-DD`) en zona America/Caracas calculada en servidor. */
   todayIso: string;
   /** Saludo contextual ("Buenos días" | "Buenas tardes" | "Buenas noches"). */
   greeting?: string;
-  /** Pestaña inicial (`resumen` | `horario` | `simulador` | `carnet` | `tramites`). */
+  /** Pestaña inicial (`resumen` | `horario` | `carnet`). */
   initialTab?: StudentPortalTab;
   /** Indica si el alumno acaba de vincular su Google Workspace `@etcandresbello.org`. */
   justLinkedWorkspace?: boolean;
-  /** Preselección opcional de tipo de trámite al llegar desde una asignatura. */
-  initialRequestType?: "constancia_estudio" | "constancia_inscripcion" | "solvencia" | "revision_notas";
-  /** Motivo inicial opcional para trámites de revisión de calificación. */
-  initialRequestReason?: string;
 }
 
 const WEEKDAY_SINGLE_LETTERS = ["L", "M", "M", "J", "V", "S", "D"];
@@ -205,15 +194,12 @@ function MiniSubjectWaffle({
 export function StudentDashboardView({
   profile,
   data,
-  tramitesData,
   initialCarnetToken = null,
   initialCarnetError = null,
   todayIso,
   greeting = "Bienvenido",
   initialTab = "resumen",
   justLinkedWorkspace = false,
-  initialRequestType,
-  initialRequestReason,
 }: StudentDashboardViewProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] =
@@ -381,8 +367,8 @@ export function StudentDashboardView({
       series: numericGradeSeries,
       sparkClass: "text-primary dark:text-[#7dd3fc]",
       kind: "sparkline" as const,
-      actionLabel: "Ir al simulador de notas",
-      onAction: () => handleTabChange("simulador"),
+      actionLabel: "Ver asignaturas y calificaciones",
+      onAction: () => router.push("/estudiante/asignaturas"),
     },
     {
       title: "Asistencia",
@@ -450,7 +436,7 @@ export function StudentDashboardView({
       sparkClass: "text-primary dark:text-[#7dd3fc]",
       kind: "sparkline" as const,
       actionLabel: "Abrir trámites y constancias",
-      onAction: () => handleTabChange("tramites"),
+      onAction: () => router.push("/estudiante/tramites"),
     },
   ];
 
@@ -504,25 +490,11 @@ export function StudentDashboardView({
             Horario Escolar
           </TabsTrigger>
           <TabsTrigger
-            value="simulador"
-            className="cursor-pointer rounded-xl px-3.5 py-2 text-xs font-medium"
-          >
-            <Calculator data-icon="inline-start" aria-hidden="true" />
-            Simulador de Notas
-          </TabsTrigger>
-          <TabsTrigger
             value="carnet"
             className="cursor-pointer rounded-xl px-3.5 py-2 text-xs font-medium"
           >
             <QrCode data-icon="inline-start" aria-hidden="true" />
             Carnet QR
-          </TabsTrigger>
-          <TabsTrigger
-            value="tramites"
-            className="cursor-pointer rounded-xl px-3.5 py-2 text-xs font-medium"
-          >
-            <FileText data-icon="inline-start" aria-hidden="true" />
-            Trámites
           </TabsTrigger>
         </TabsList>
 
@@ -706,6 +678,14 @@ export function StudentDashboardView({
               </div>
             </div>
           </div>
+
+          {/* Pulso vivo de la jornada diaria integrado dentro de la tarjeta Hero */}
+          <TodaySchoolPulseCard
+            scheduleBlocks={data.scheduleBlocks}
+            teacherAbsenceAlerts={data.teacherAbsenceAlerts}
+            todayIso={todayIso}
+            canOpenAttendanceHub={profile.accessTier === "verified_workspace"}
+          />
         </motion.section>
 
         {/* Tarjeta Calendario Semanal e Interactiva (Mejora #14 del Plan) */}
@@ -838,6 +818,14 @@ export function StudentDashboardView({
                 ))}
               </ul>
             )}
+
+            <div className="mt-3.5">
+              <StudentFullCalendarDialog
+                events={data.calendarEvents}
+                todayIso={todayIso}
+                schoolYearName={data.schoolYearName}
+              />
+            </div>
           </div>
         </motion.aside>
       </div>
@@ -954,6 +942,53 @@ export function StudentDashboardView({
       {/* Fila 3 — Medallas de Desempeño y Puntualidad */}
       <StudentMedalsStrip medals={data.medals} />
 
+      {/* Bloque condicional de Materias Pendientes reglamentarias */}
+      {data.pendingSubjects.length > 0 ? (
+        <section
+          aria-label="Materias pendientes reglamentarias"
+          className="siga-glass-surface rounded-[28px] border p-5 sm:p-6"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">
+                Materias Pendientes (Hasta 4 Momentos)
+              </h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Seguimiento oficial de tus intentos registrados en Control de
+                Estudios.
+              </p>
+            </div>
+            <Badge variant="secondary" className="tabular-nums">
+              {data.pendingSubjects.length} registro(s)
+            </Badge>
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            {data.pendingSubjects.map((attempt) => (
+              <div
+                key={attempt.id}
+                className="siga-glass-inner flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-xs"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-foreground">
+                    {attempt.subjectName}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Momento {attempt.attemptNumber}/4 · {attempt.examDate}
+                  </p>
+                </div>
+                <Badge
+                  variant={attempt.passed ? "default" : "destructive"}
+                  className="shrink-0 tabular-nums"
+                >
+                  {attempt.finalNumeric}/20 ·{" "}
+                  {attempt.passed ? "Aprobada" : "Pendiente"}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {/* Fila 4 — Bloque AnalyticsBento limpio para Dashboard (Curva MPPE y Ondas de Asistencia) */}
       <SigaAnalyticsBento
         key={`${enrollmentFingerprint}|${data.activeMomentNumber ?? ""}`}
@@ -967,15 +1002,12 @@ export function StudentDashboardView({
             scheduleBlocks={data.scheduleBlocks}
             todayIso={todayIso}
             sectionLabel={enrollmentSubtitle}
-          />
-        </TabsContent>
-
-        <TabsContent value="simulador">
-          <StudentGradeSimulator
-            key={`${enrollmentFingerprint}|${data.activeMomentName ?? ""}`}
-            simulatorSubjects={data.simulatorSubjects}
-            pendingSubjects={data.pendingSubjects}
-            activeMomentName={data.activeMomentName}
+            studentName={`${profile.firstName} ${profile.lastName}`}
+            cedulaDisplay={formatVenezuelanCedulaDisplay(profile.cedula)}
+            schoolYearName={data.schoolYearName}
+            gradeYear={data.gradeYear}
+            mencionName={data.mencionName}
+            sectionLetter={data.sectionLetter}
           />
         </TabsContent>
 
@@ -993,16 +1025,6 @@ export function StudentDashboardView({
             initialError={initialCarnetError}
             onTokenIssued={handleCarnetTokenIssued}
             embedded
-          />
-        </TabsContent>
-
-        <TabsContent value="tramites">
-          <StudentTramitesView
-            profile={profile}
-            initialData={tramitesData}
-            embedded
-            initialRequestType={initialRequestType}
-            initialRequestReason={initialRequestReason}
           />
         </TabsContent>
       </Tabs>

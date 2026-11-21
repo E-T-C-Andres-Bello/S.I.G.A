@@ -83,6 +83,8 @@ export interface StudentTramitesViewProps {
   initialData: StudentTramitesData;
   /** Cuando se renderiza dentro de una pestaña de `/estudiante`, omite el encabezado independiente. */
   embedded?: boolean;
+  /** Muestra enlace "Volver al inicio estudiantil" cuando no se accede desde el sidebar principal. */
+  showBackLink?: boolean;
   /** Preselección opcional de trámite al navegar desde una asignatura. */
   initialRequestType?: StudentRequestType;
   /** Detalle prellenado opcional cuando proviene de una revisión de asignatura. */
@@ -118,6 +120,7 @@ export function StudentTramitesView({
   profile,
   initialData,
   embedded = false,
+  showBackLink = true,
   initialRequestType,
   initialRequestReason,
 }: StudentTramitesViewProps) {
@@ -371,13 +374,15 @@ export function StudentTramitesView({
       ) : (
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
           <div>
-            <Link
-              href="/estudiante"
-              className="mb-2 inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ArrowLeft className="size-3.5" aria-hidden="true" />
-              Volver al inicio estudiantil
-            </Link>
+            {showBackLink ? (
+              <Link
+                href="/estudiante"
+                className="mb-2 inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <ArrowLeft className="size-3.5" aria-hidden="true" />
+                Volver al inicio estudiantil
+              </Link>
+            ) : null}
             <h1 className="text-[1.75rem] leading-tight font-normal tracking-[-0.03em] text-foreground sm:text-[2.15rem]">
               Trámites Express y Constancias
             </h1>

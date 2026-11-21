@@ -18,7 +18,48 @@
    - **Docente titular (`teaches_assignment`):** dentro del mismo curso administra módulos (`course_modules`), materiales (`course_materials`), tareas (`assignments`), exámenes (`online_exams`), rúbricas, revisión de entregas (`assignment_submissions`) y calificación directa hacia `student_scores`.
    - **Coordinación de Mención / Dirección:** supervisión de lectura acotada (`is_coord_of_mencion(s.mencion_id)` o `direccion`).
 4. **Los laboratorios por mención viven *dentro* del Aula Virtual unificada:**
-   - `/aula-virtual/telematica`, `/aula-virtual/aduanas` y `/aula-virtual/turismo` no reemplazan a `/aula-virtual`; son **entornos prácticos complementarios** (`mention_lab_scenarios` y `mention_lab_submissions`) enlazados desde el propio campus para prácticas técnicas de especialidad.
+  - `/aula-virtual/telematica`, `/aula-virtual/aduanas` y `/aula-virtual/turismo` no reemplazan a `/aula-virtual`; son **entornos prácticos complementarios** (`mention_lab_scenarios` y `mention_lab_submissions`) enlazados desde el propio campus para prácticas técnicas de especialidad.
+
+---
+
+## 1B. Alcance Funcional: LMS, Tutor Socrático IA 24/7 y Entornos Prácticos por Mención
+
+### Aula Virtual (LMS) y Tutor Socrático IA 24/7 (RAG)
+- **Matriculación Automática:** Al quedar `active` en `enrollments`, las áreas de formación de su sección aparecen automáticamente en su panel de cursos virtuales (`virtual_courses`), sin códigos de aula manuales ni riesgo de ingresar a secciones ajenas.
+- **Módulos y Recursos Didácticos:** Descarga o vista previa de guías PDF, presentaciones, enlaces de video y fragmentos de código publicados por el docente.
+- **Buzón de Tareas y Exámenes Online:** Envío de entregas digitales (texto o archivo validado) con indicador claro de fecha límite o entrega tardía, y presentación de exámenes objetivos cronometrados (`siga_get_exam_questions_student` / `siga_submit_exam_attempt`) con sincronización directa a `student_scores`.
+- **Tutor Socrático IA 24/7 (RAG):** Chat contextual por área de formación que responde dudas exclusivamente a partir de las guías indexadas del docente en `pgvector` (`siga_match_rag_chunks` filtrado por `virtual_course_id`). Nunca entrega la respuesta final ni redacta ensayos completos; guía paso a paso con pistas, ejemplos paralelos y citas de la guía consultada, persistiendo sesiones en `ai_tutor_threads` y `ai_tutor_messages`.
+
+### Entornos Prácticos Exclusivos por Mención Técnica (1.º a 6.º Año)
+El campus filtra automáticamente el entorno correspondiente a la `mencion_id` de la matrícula del alumno:
+
+- **Mención Telemática — Especialidad Industrial (`/aula-virtual/telematica`):**
+  1. *Sandbox de Práctica SQL y Código:* Editor interactivo donde el estudiante ejecuta consultas `SELECT` y ejercicios relacionales sobre tablas sintéticas en **Neon Serverless (`siga-telematica-labs`)** vía Edge Function con rol de privilegios mínimos y `statement_timeout = 3s`, viendo resultados tabulares y errores SQL reales para aprender depuración.
+  2. *Simulador de Redes, Subredes IP y T568A/B:* Calculadora interactiva de máscaras CIDR, capas OSI/TCP-IP y secuencia de colores de cableado estructurado.
+  3. *Bitácora Técnica de Ensamblaje y Soporte TI:* Registro académico estructurado de prácticas de laboratorio (inventario de piezas, fallas diagnosticadas e instalación de sistemas).
+- **Mención Aduana — Especialidad Economía Social (`/aula-virtual/aduanas`):**
+  1. *Clasificador Arancelario (Sistema Armonizado):* Buscador guiado de códigos arancelarios, notas de sección y ejercicio de clasificación de mercancías desde catálogo base y casos docentes.
+  2. *Calculadora de Valoración CIF/FOB e Incoterms:* Simulador interactivo de desglose de valor FOB, flete, seguro, base imponible CIF y cálculo *ad valorem*.
+  3. *Taller Documental de Comercio Exterior:* Formularios digitales modelo para diligenciar correctamente *Bill of Lading* (B/L), guías aéreas y declaraciones de aduana.
+- **Mención Turismo — Especialidad Economía Social (`/aula-virtual/turismo`):**
+  1. *Planificador de Rutas Patrimoniales de Guayana:* Selección de puntos culturales, ecológicos e históricos (Ciudad Guayana, La Llovizna, Cachamay, Orinoco, Estado Bolívar) con cálculo de tiempos, guion interpretativo e itinerario.
+  2. *Gestor de Eventos y Protocolo:* Plantillas académicas para organizar cronogramas, presupuestos de práctica y montaje protocolar.
+  3. *Simulador de Recepción Hotelera y Guiones Bilingües:* Flujo interactivo de *check-in / check-out*, tarjetas de registro de huéspedes y diálogos de práctica español/inglés.
+
+```mermaid
+sequenceDiagram
+    participant Alumno as Estudiante (Telemática)
+    participant Next as Next.js Client/SSR
+    participant Edge as Supabase Edge Function
+    participant Neon as Neon (siga-telematica-labs)
+
+    Alumno->>Next: Escribe consulta SQL en Sandbox
+    Next->>Edge: POST /functions/v1/telematica-sql (JWT Supabase)
+    Edge->>Edge: Verifica rol estudiante + mención Telemática
+    Edge->>Neon: Ejecuta SQL en rol restringido (timeout 3s)
+    Neon-->>Edge: Filas sintéticas o error SQL didáctico
+    Edge-->>Next: JSON resultado (sin credenciales)
+```
 
 ---
 

@@ -1,7 +1,7 @@
 export type CurriculumAxisId =
-  | "formacion_comun"
-  | "identidad_bienestar"
-  | "nucleo_tecnico";
+  | "formacion_general"
+  | "formacion_cientifica_tecnologica"
+  | "practica_vocacional_profesional";
 
 export type CurriculumNodeStatus =
   | "enrolled"
@@ -14,6 +14,7 @@ export type CurriculumNodeStatus =
 export interface CurriculumAxisMeta {
   id: CurriculumAxisId;
   label: string;
+  shortLabel: string;
   description: string;
 }
 
@@ -58,24 +59,36 @@ export const MOMENT_PERIOD_STATUS_LABELS: Record<string, string> = {
   published: "Publicado",
 };
 
-const IDENTITY_WELLBEING_CODES = new Set(["GHC", "FSN", "EDF", "CRP"]);
+const VOCATIONAL_PRACTICE_CODES = new Set(["OVS", "PPRO"]);
+const SCIENTIFIC_TECH_CODES = new Set([
+  "PEST",
+  "ADU-FTA",
+  "TUR-GSTH",
+  "TEL-PDSR",
+]);
 
-const COMMON_AXIS_META: CurriculumAxisMeta = {
-  id: "formacion_comun",
-  label: "Formación Común MPPE",
-  description: "Área científica, humanística y lingüística compartida entre menciones.",
+const GENERAL_AXIS_META: CurriculumAxisMeta = {
+  id: "formacion_general",
+  label: "Formación General",
+  shortLabel: "Form. General",
+  description:
+    "Áreas humanísticas, lingüísticas, deportivas y científico-sociales compartidas.",
 };
 
-const IDENTITY_AXIS_META: CurriculumAxisMeta = {
-  id: "identidad_bienestar",
-  label: "Ciudadanía y Bienestar",
-  description: "Formación ciudadana, socio-productiva, física y cultural.",
+const SCIENTIFIC_TECH_AXIS_META: CurriculumAxisMeta = {
+  id: "formacion_cientifica_tecnologica",
+  label: "Formación Científica, Tecnológica y Productiva",
+  shortLabel: "Cient. y Tec.",
+  description:
+    "Competencias técnicas, productivas y especializadas de la mención.",
 };
 
-const TECHNICAL_AXIS_META: CurriculumAxisMeta = {
-  id: "nucleo_tecnico",
-  label: "Núcleo Técnico de Mención",
-  description: "Competencias profesionales orientadas al perfil de Técnico Medio.",
+const VOCATIONAL_AXIS_META: CurriculumAxisMeta = {
+  id: "practica_vocacional_profesional",
+  label: "Práctica Vocacional y Profesional",
+  shortLabel: "Práctica Prof.",
+  description:
+    "Orientación sociolaboral (1.º a 5.º año) y Práctica Profesional de 6.º año.",
 };
 
 interface TrackDefinition {
@@ -88,80 +101,85 @@ interface TrackDefinition {
 const CURRICULUM_TRACK_DEFINITIONS: TrackDefinition[] = [
   {
     mencionCode: "TELEMATICA",
-    title: "Infraestructura, Redes y Seguridad TI",
+    title: "Formación Técnica Industrial · Telemática",
     description:
-      "Evolución desde ofimática y arquitectura de hardware hasta redes LAN, servidores y pasantías.",
-    codes: ["TEL-OFI", "TEL-ARQ", "TEL-RED", "TEL-SEG"],
-  },
-  {
-    mencionCode: "TELEMATICA",
-    title: "Lógica, Programación y Bases de Datos",
-    description:
-      "Construcción progresiva de pensamiento algorítmico, desarrollo web y gestión SQL.",
-    codes: ["TEL-OFI", "TEL-ALG", "TEL-BDD", "TEL-SEG"],
+      "Continuidad desde proyectos socioproductivos y programación de software y redes hasta la Práctica Profesional de 6.º año.",
+    codes: ["PEST", "TEL-PDSR", "OVS", "PPRO"],
   },
   {
     mencionCode: "ADUANAS",
-    title: "Comercio Exterior y Valoración Aduanera",
+    title: "Economía Social · Aduana",
     description:
-      "De la iniciación comercial y contable hasta valoración CIF/FOB y regímenes especiales.",
-    codes: ["ADU-COM", "ADU-CON", "ADU-VAL", "ADU-REG"],
-  },
-  {
-    mencionCode: "ADUANAS",
-    title: "Legislación y Clasificación Arancelaria",
-    description:
-      "Dominio progresivo de potestad aduanera, Sistema Armonizado y práctica aduanal.",
-    codes: ["ADU-COM", "ADU-POT", "ADU-ARA", "ADU-REG"],
+      "Integración de proyectos socioproductivos, fundamentos y técnicas de aduana y Práctica Profesional de 6.º año.",
+    codes: ["PEST", "ADU-FTA", "OVS", "PPRO"],
   },
   {
     mencionCode: "TURISMO",
-    title: "Patrimonio, Guiatura y Ecoturismo",
+    title: "Economía Social · Turismo y Hospitalidad",
     description:
-      "Recorrido formativo desde la anfitrionía guayanesa hasta la gestión integral de operadoras.",
-    codes: ["TUR-PAT", "TUR-SIS", "TUR-GUI", "TUR-ECO"],
+      "Articulación de proyectos socioproductivos, gestión turística-hotelera, idiomas aplicados y Práctica Profesional.",
+    codes: ["PEST", "TUR-GSTH", "IDI", "OVS", "PPRO"],
   },
   {
-    mencionCode: "TURISMO",
-    title: "Idiomas Aplicados y Hospitalidad Hotelera",
+    mencionCode: "ALL",
+    title: "Comunicación, Pensamiento Lógico y Lenguas",
     description:
-      "Atención bilingüe, recepción hotelera, protocolo y dirección de eventos.",
-    codes: ["TUR-SIS", "TUR-ING", "TUR-HOT", "TUR-ECO"],
+      "Lengua y Literatura, Matemática e Idiomas a lo largo de 1.º a 5.º año.",
+    codes: ["LYL", "MAT", "IDI"],
   },
   {
     mencionCode: "ALL",
-    title: "Eje Científico y Cuantitativo MPPE",
-    description: "Soporte lógico-matemático y ciencias aplicadas de 1.º a 5.º año.",
-    codes: ["CNAT", "MAT", "FIS", "QUI"],
-  },
-  {
-    mencionCode: "ALL",
-    title: "Comunicación e Idiomas",
-    description: "Comprensión lectora, redacción técnica e inglés técnico transversal.",
-    codes: ["CAS", "ING"],
-  },
-  {
-    mencionCode: "ALL",
-    title: "Ciudadanía, Soberanía y Desarrollo Integral",
-    description: "Formación ciudadana, actividad física y grupos socioproductivos (CRP).",
-    codes: ["GHC", "FSN", "EDF", "CRP"],
+    title: "Ciencias, Ambiente, Soberanía y Bienestar",
+    description:
+      "Educación Física (1.º–3.º), Biología, Ambiente y Tecnología y Geografía, Historia y Soberanía Nacional.",
+    codes: ["EDF", "BAT", "GHSN"],
   },
 ];
 
 /**
- * Clasifica una asignatura oficial MPPE dentro de su eje formativo institucional.
+ * Clasifica un área de formación dentro de su componente oficial del Plan de Estudio.
  */
 export function classifyCurriculumAxis(
   subjectCode: string,
-  isTechnicalCore: boolean
+  isTechnicalCore: boolean,
+  curriculumComponent?: string | null
 ): CurriculumAxisMeta {
-  if (isTechnicalCore) {
-    return TECHNICAL_AXIS_META;
+  if (curriculumComponent === "practica_vocacional_profesional") {
+    return VOCATIONAL_AXIS_META;
   }
-  if (IDENTITY_WELLBEING_CODES.has(subjectCode.trim().toUpperCase())) {
-    return IDENTITY_AXIS_META;
+  if (curriculumComponent === "formacion_cientifica_tecnologica") {
+    return SCIENTIFIC_TECH_AXIS_META;
   }
-  return COMMON_AXIS_META;
+  if (curriculumComponent === "formacion_general") {
+    return GENERAL_AXIS_META;
+  }
+
+  const normalized = subjectCode.trim().toUpperCase();
+  if (VOCATIONAL_PRACTICE_CODES.has(normalized)) {
+    return VOCATIONAL_AXIS_META;
+  }
+  if (isTechnicalCore || SCIENTIFIC_TECH_CODES.has(normalized)) {
+    return SCIENTIFIC_TECH_AXIS_META;
+  }
+  return GENERAL_AXIS_META;
+}
+
+/**
+ * Formatea la carga horaria de un área o de un año escolar (semanal o anual para 6.º año).
+ */
+export function formatCurriculumWorkload(
+  weeklyHours: number,
+  annualHours?: number | null,
+  style: "short" | "long" = "short"
+): string {
+  if (annualHours && annualHours > 0 && weeklyHours <= 0) {
+    return style === "long"
+      ? `${annualHours} horas / año escolar`
+      : `${annualHours} h/año`;
+  }
+  return style === "long"
+    ? `${weeklyHours} h / semana`
+    : `${weeklyHours} h/sem`;
 }
 
 /**
@@ -198,8 +216,8 @@ export function resolveCurriculumNodeStatus(params: {
 }
 
 /**
- * Ubica la secuencia formativa del pensum a la que pertenece una asignatura
- * para mostrar de dónde proviene y hacia qué materias futuras progresa.
+ * Ubica la secuencia formativa del pensum a la que pertenece un área de formación
+ * para mostrar cómo se articula con el resto del Plan de Estudio.
  */
 export function getSubjectProgressionContext(
   mencionCode: string | null,

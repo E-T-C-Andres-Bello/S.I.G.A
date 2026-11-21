@@ -6,7 +6,11 @@ import { verifyPreEnrolledAccess } from "@/lib/supabase/auth-verification";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   recoveryEmailSchema,
+  studentAvatarUrlSchema,
+  studentProfileContactSchema,
   studentRequestCreateSchema,
+  type StudentProfileContactInput,
+  type StudentProfileContactParsed,
   type StudentRequestCreateInput,
 } from "@/lib/validators/student-portal";
 
@@ -262,5 +266,99 @@ export async function generateStudentCarnetTokenAction(
         enrollmentStatus: raw.card.enrollment_status ?? null,
       },
     },
+  };
+}
+
+export async function updateStudentProfileContactAction(
+  input: StudentProfileContactInput
+): Promise<ActionResult<StudentProfileContactParsed & { changedFields: string[] }>> {
+  const parsed = studentProfileContactSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message:
+        parsed.error.issues[0]?.message ??
+        "Revisa los datos de contacto y emergencia ingresados.",
+    };
+  }
+
+  const session = await requireAuthenticatedStudentSession();
+  if (!session.ok) return session;
+
+  const { data, error } = await session.supabase.rpc(
+    "siga_actualizar_perfil_estudiante",
+    {
+      p_phone: parsed.data.phone,
+      p_recovery_email: parsed.data.recoveryEmail,
+      p_emergency_contact_name: parsed.data.emergencyContactName,
+      p_emergency_contact_cedula: parsed.data.emergencyContactCedula,
+      p_emergency_contact_phone: parsed.data.emergencyContactPhone,
+      p_emergency_contact_relationship: parsed.data.emergencyContactRelationship,
+    }
+  );
+
+  if (error) {
+    return { ok: false, message: mapRpcError(error), code: error.code };
+  }
+
+  revalidatePath("/estudiante");
+  revalidatePath("/estudiante/perfil");
+
+  const changedFields =
+    data &&
+    typeof data === "object" &&
+    "changed_fields" in data &&
+    Array.isArray((data as { changed_fields?: unknown }).changed_fields)
+      ? ((data as { changed_fields: string[] }).changed_fields ?? [])
+      : [];
+
+  return {
+    ok: true,
+    data: {
+      ...parsed.data,
+      changedFields,
+    },
+  };
+}
+
+export async function updateStudentAvatarUrlAction(
+  avatarUrl: string | null
+): Promise<ActionResult<{ avatarWebpUrl: string | null }>> {
+  const parsed = studentAvatarUrlSchema.safeParse(avatarUrl);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message:
+        parsed.error.issues[0]?.message ??
+        "La fotografía seleccionada no cumple el formato institucional.",
+    };
+  }
+
+  const session = await requireAuthenticatedStudentSession();
+  if (!session.ok) return session;
+
+  const { data, error } = await session.supabase.rpc(
+    "siga_actualizar_avatar_estudiante",
+    {
+      p_avatar_webp_url: parsed.data,
+    }
+  );
+
+  if (error) {
+    return { ok: false, message: mapRpcError(error), code: error.code };
+  }
+
+  revalidatePath("/estudiante");
+  revalidatePath("/estudiante/perfil");
+  revalidatePath("/estudiante/carnet");
+
+  const resolvedUrl =
+    data && typeof data === "object" && "avatar_webp_url" in data
+      ? ((data as { avatar_webp_url: string | null }).avatar_webp_url ?? null)
+      : parsed.data;
+
+  return {
+    ok: true,
+    data: { avatarWebpUrl: resolvedUrl },
   };
 }

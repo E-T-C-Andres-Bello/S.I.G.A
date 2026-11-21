@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
 import { cn } from "cn";
 import type {
   StudentDashboardData,
@@ -744,10 +743,12 @@ function CurriculumTreemap({
   items,
   periodLabel,
   tip,
+  compact = false,
 }: {
   items: TreemapInputItem[];
   periodLabel: string;
   tip: TipRef;
+  compact?: boolean;
 }) {
   const [ref, { w: W, h: H }] = useSize();
   const [placed, setPlaced] = React.useState(false);
@@ -761,19 +762,35 @@ function CurriculumTreemap({
     }
   }, [W]);
 
-  const G = 6;
+  const G = 5;
   const sorted = React.useMemo(
     () => [...items].sort((a, b) => b.weightVal - a.weightVal),
     [items]
   );
   const rects = W && H ? squarify(sorted, 0, 0, W + G, H + G) : [];
 
+  if (items.length === 0) {
+    return (
+      <div
+        className={cn(
+          "siga-glass-inner mt-2 flex items-center justify-center rounded-2xl border border-dashed px-4 text-center text-xs text-muted-foreground",
+          compact ? "h-[205px] sm:h-[225px]" : "h-[250px] sm:h-[280px]"
+        )}
+      >
+        Sin asignaturas inscritas en este período todavía.
+      </div>
+    );
+  }
+
   return (
     <div
       ref={ref}
-      className="relative mt-2 h-[250px] sm:h-[280px]"
-      role="img"
-      aria-label={`Mapa curricular · ${periodLabel}`}
+      className={cn(
+        "relative mt-2",
+        compact ? "h-[205px] sm:h-[225px]" : "h-[250px] sm:h-[280px]"
+      )}
+      role="region"
+      aria-label={`Mapa de asignaturas del año actual · ${periodLabel}`}
     >
       {rects.map((r) => {
         const g =
@@ -781,13 +798,15 @@ function CurriculumTreemap({
           CURRICULUM_GROUPS[2];
         const w = Math.max(0, r.w - G);
         const h = Math.max(0, r.h - G);
-        const tiny = h < 52 || w < 64;
-        const showName = h >= 68 && w >= 88;
+        const tiny = h < 48 || w < 62;
+        const showName = h >= 62 && w >= 84;
 
         return (
-          <div
+          <Link
             key={r.code + r.name}
-            className="absolute flex flex-col justify-between overflow-hidden rounded-[16px] border border-white/20 p-3 text-white shadow-sm transition-[left,top,width,height,filter] duration-700 [transition-timing-function:cubic-bezier(.2,.9,.25,1)] hover:brightness-110 motion-reduce:transition-none"
+            href={`/estudiante/asignaturas/${encodeURIComponent(r.code)}`}
+            aria-label={`${r.name}: ${r.statusText}`}
+            className="absolute flex flex-col justify-between overflow-hidden rounded-[14px] border border-white/20 p-2.5 text-white shadow-sm transition-[left,top,width,height,filter] duration-700 [transition-timing-function:cubic-bezier(.2,.9,.25,1)] hover:brightness-110 focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:outline-none motion-reduce:transition-none"
             style={{
               left: placed ? r.x : W / 2,
               top: placed ? r.y : H / 2,
@@ -807,7 +826,7 @@ function CurriculumTreemap({
             }
             onPointerLeave={() => tip.current?.hide()}
           >
-            <div className="flex items-center gap-1.5 text-[10.5px] font-semibold tracking-[0.04em] uppercase">
+            <div className="flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.04em] uppercase">
               <TileIcon />
               {showName ? (
                 <span className="truncate">{r.name}</span>
@@ -817,15 +836,15 @@ function CurriculumTreemap({
             </div>
             {!tiny && (
               <div className="flex items-end justify-between gap-1.5">
-                <span className="font-kpi-num text-2xl leading-none font-light tracking-normal sm:text-[26px]">
+                <span className="font-kpi-num text-xl leading-none font-light tracking-normal sm:text-2xl">
                   <CountUp value={r.displayValue} duration={850} />
                 </span>
-                <span className="rounded-md bg-black/45 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white backdrop-blur-xs">
+                <span className="rounded-md bg-black/45 px-1.5 py-0.5 text-[9.5px] font-medium tabular-nums text-white backdrop-blur-xs">
                   {r.statusText}
                 </span>
               </div>
             )}
-          </div>
+          </Link>
         );
       })}
     </div>
@@ -840,12 +859,14 @@ function AcademicRadar({
   periodLabel,
   color,
   tip,
+  compact = false,
 }: {
   values: number[];
   axis: string[];
   periodLabel: string;
   color: string;
   tip: TipRef;
+  compact?: boolean;
 }) {
   const [ref, { w }] = useSize();
   const reduce = useReducedMotion();
@@ -853,9 +874,10 @@ function AcademicRadar({
   const cur = React.useRef<number[] | null>(null);
   const [hover, setHover] = React.useState<number | null>(null);
 
+  const maxDiameter = compact ? 236 : 340;
   const N = values.length;
-  const S = Math.min(w || 300, 340);
-  const R = Math.max(40, S / 2 - 34);
+  const S = Math.min(w || maxDiameter, maxDiameter);
+  const R = Math.max(40, S / 2 - (compact ? 28 : 34));
   const C = S / 2;
   const ang = (i: number) => -Math.PI / 2 + (i / N) * Math.PI * 2;
 
@@ -957,8 +979,11 @@ function AcademicRadar({
   return (
     <div
       ref={ref}
-      className="mx-auto mt-1 w-full max-w-[340px]"
-      style={{ height: S || 280 }}
+      className={cn(
+        "mx-auto mt-1 w-full",
+        compact ? "max-w-[236px]" : "max-w-[340px]"
+      )}
+      style={{ height: S || (compact ? 225 : 280) }}
     >
       {S > 0 && (
         <svg
@@ -1212,53 +1237,24 @@ export function SigaAnalyticsBento({
       });
     }
 
-    return [
-      {
-        name: "Formación General",
-        code: "FG-01",
-        group: "pendiente",
-        weightVal: 32,
-        displayValue: 0,
-        statusText: "0 materias",
-      },
-      {
-        name: "Especialidad Técnica",
-        code: "ET-02",
-        group: "aprobada",
-        weightVal: 38,
-        displayValue: 0,
-        statusText: "Sin malla",
-      },
-      {
-        name: "Ciencias Básicas",
-        code: "CB-03",
-        group: "destacada",
-        weightVal: 18,
-        displayValue: 0,
-        statusText: "0 materias",
-      },
-      {
-        name: "Pasantías y Proyecto",
-        code: "PP-04",
-        group: "pendiente",
-        weightVal: 12,
-        displayValue: 0,
-        statusText: "Por asignar",
-      },
-    ];
+    return [];
   }, [selectedPeriodSubjects]);
 
-  /* 4. Datos para el Radar Académico */
+  /* 4. Datos para el Radar Académico (exclusivo del año actual) */
   const radarData = React.useMemo(() => {
-    if (radarMode === 0 && hasSubjects && data.subjectsSummary.length >= 3) {
-      const slice = data.subjectsSummary.slice(0, 8);
+    const activeSliceSource =
+      selectedPeriodSubjects.length >= 3
+        ? selectedPeriodSubjects
+        : data.subjectsSummary;
+    if (radarMode === 0 && activeSliceSource.length >= 3) {
+      const slice = activeSliceSource.slice(0, 8);
       return {
         axis: slice.map((s) => s.subjectCode.slice(0, 4).toUpperCase()),
         values: slice.map((s) => s.finalNumeric ?? 0),
       };
     }
     return {
-      axis: ["MAT", "LEN", "CIE", "TEC", "ING", "PRO"],
+      axis: ["PROM", "ASIS", "AVAN", "ÁREA", "PUNT", "EVAL"],
       values:
         radarMode === 0
           ? [
@@ -1270,12 +1266,14 @@ export function SigaAnalyticsBento({
               data.averageGrade ?? 0,
             ]
           : [
+              data.averageGrade ?? 0,
               data.attendancePercent ? (data.attendancePercent / 100) * 20 : 0,
               data.completionPercent ? (data.completionPercent / 100) * 20 : 0,
-              data.averageGrade ?? 0,
-              data.enrolledSubjectsCount > 0 ? 14 : 0,
+              data.enrolledSubjectsCount > 0
+                ? Math.min(20, (gradedList.filter((s) => s.finalNumeric >= 10).length / data.enrolledSubjectsCount) * 20)
+                : 0,
               data.attendanceSessionsCount > 0 ? 16 : 0,
-              data.upcomingEvaluations.length > 0 ? 15 : 0,
+              gradedList.length > 0 ? Math.min(20, (gradedList.length / Math.max(1, data.enrolledSubjectsCount)) * 20) : 0,
             ],
     };
   }, [
@@ -1285,9 +1283,9 @@ export function SigaAnalyticsBento({
     data.completionPercent,
     data.enrolledSubjectsCount,
     data.subjectsSummary,
-    data.upcomingEvaluations.length,
-    hasSubjects,
+    gradedList,
     radarMode,
+    selectedPeriodSubjects,
   ]);
 
   const showOverview = variant !== "curriculum";
@@ -1440,228 +1438,124 @@ export function SigaAnalyticsBento({
 
         {showCurriculum ? (
           <>
-            {/* TARJETA C: Mapa Curricular y Asignaturas del Período (Treemap + Tabla) */}
+            {/* TARJETA C: Mapa Visual del Año Actual (compacto, sin tabla redundante) */}
             <section
-              aria-label="Mapa curricular y asignaturas del período"
-              className="siga-glass-surface col-span-12 rounded-[28px] border p-5 sm:p-6 lg:col-span-7"
+              aria-label="Mapa de asignaturas del año actual"
+              className="siga-glass-surface col-span-12 flex flex-col justify-between rounded-[24px] border p-4 sm:p-5 lg:col-span-7"
             >
-              <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-                <div>
-                  <h2 className="m-0 text-base leading-snug font-semibold tracking-[-0.02em] text-foreground">
-                    Mapa Curricular y Asignaturas
-                  </h2>
-                  <p className="mt-1 text-xs leading-[1.5] text-muted-foreground">
-                {hasSubjects
-                  ? `Pensum activo · ${data.subjectsSummary.length} materia(s) inscrita(s)`
-                  : "Distribución estructural E.T.C. (en espera de carga de malla)"}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-x-3.5 gap-y-2 text-[11px] leading-normal text-muted-foreground">
-              {CURRICULUM_GROUPS.map((g) => (
-                <span key={g.id} className="inline-flex items-center gap-1.5">
-                  <i
-                    className="size-2 rounded-[2px]"
-                    style={{ background: g.color }}
-                  />
-                  {g.name}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {/* Selector de los 3 Momentos Pedagógicos */}
-          <div className="my-4 grid grid-cols-3 gap-2.5 sm:gap-3">
-            {periodTabs.map((p, i) => (
-              <button
-                key={p.label}
-                type="button"
-                aria-pressed={i === periodIdx}
-                onClick={() => setPeriodIdx(i)}
-                className={cn(
-                  "siga-glass-inner cursor-pointer rounded-2xl border p-3.5 text-left outline-none transition-all focus-visible:ring-2 focus-visible:ring-primary/50",
-                  i === periodIdx
-                    ? "ring-1 ring-primary/50"
-                    : "opacity-80 hover:opacity-100"
-                )}
-              >
-                <div className="flex items-center gap-1.5 text-xs leading-snug font-semibold tracking-[-0.01em] text-foreground">
-                  <i
-                    className={cn(
-                      "size-1.5 rounded-full transition-colors",
-                      i === periodIdx
-                        ? "bg-primary dark:bg-sky-400"
-                        : "bg-muted-foreground/50"
-                    )}
-                  />
-                  <span className="truncate">{p.label}</span>
-                </div>
-                <div className="font-kpi-num mt-2 flex items-baseline gap-1.5 text-xl leading-[1.15] font-light sm:text-2xl">
-                  <CountUp value={p.total} />
-                  <span className="text-[11px] font-medium tracking-normal text-muted-foreground">
-                    mat.
-                  </span>
-                </div>
-                <div className="mt-1.5 hidden truncate text-[11px] leading-normal text-muted-foreground sm:block">
-                  {p.compare}
-                </div>
-              </button>
-            ))}
-          </div>
-
-          <CurriculumTreemap
-            items={treemapItems}
-            periodLabel={periodTabs[periodIdx]?.label ?? "1.º Momento"}
-            tip={tip}
-          />
-
-          {/* Tabla de asignaturas reales debajo del Treemap */}
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full border-collapse text-xs sm:text-sm">
-              <thead>
-                <tr className="border-b border-border/70 text-[11px] font-medium text-muted-foreground">
-                  <th className="pb-2 text-left">Asignatura</th>
-                  <th className="pb-2 text-right">Código</th>
-                  <th className="pb-2 text-right">Escala</th>
-                  <th className="pb-2 text-right">Definitiva</th>
-                </tr>
-              </thead>
-              <tbody>
-                {selectedPeriodSubjects.length > 0 ? (
-                  selectedPeriodSubjects.map((s) => (
-                    <tr
-                      key={s.curriculumSubjectId}
-                      className="border-b border-border/50 last:border-0"
-                    >
-                      <td className="py-2.5 text-left font-medium text-foreground">
-                        <Link
-                          href={`/estudiante/asignaturas/${encodeURIComponent(s.subjectCode)}`}
-                          className="inline-flex items-center gap-1 hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none dark:hover:text-sky-300"
-                        >
-                          <span>{s.subjectName}</span>
-                          <ArrowUpRight
-                            className="size-3 opacity-65"
-                            aria-hidden="true"
-                          />
-                        </Link>
-                      </td>
-                      <td className="py-2.5 text-right tabular-nums text-muted-foreground">
-                        {s.subjectCode}
-                      </td>
-                      <td className="py-2.5 text-right text-muted-foreground">
-                        {s.gradingScale === "LITERAL_A_E" ? "A–E" : "1–20"}
-                      </td>
-                      <td className="py-2.5 text-right font-semibold tabular-nums text-foreground">
-                        {s.finalNumeric !== null
-                          ? `${s.finalNumeric} pts`
-                          : s.finalLiteral ?? "—"}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td
-                      colSpan={4}
-                      className="py-4 text-center text-xs text-muted-foreground"
-                    >
-                      Sin asignaturas asignadas todavía · Cuando Control de
-                      Estudios inscriba tu sección, verás aquí cada materia y su
-                      nota oficial.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        {/* TARJETA D: Radar de Competencias y Balance */}
-        <section
-          aria-label="Radar de competencias académicas"
-          className="siga-glass-surface col-span-12 flex flex-col justify-between rounded-[28px] border p-5 sm:p-6 lg:col-span-5"
-        >
-          <div>
-            <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
               <div>
-                <h2 className="m-0 text-base leading-snug font-semibold tracking-[-0.02em] text-foreground">
-                  Balance de Competencias
-                </h2>
-                <p className="mt-1 text-xs leading-[1.5] text-muted-foreground">
-                  Polígono de rendimiento sobre 20 puntos
-                </p>
-              </div>
-              <Segmented
-                label="Vista del radar"
-                items={["Materias", "Global"]}
-                value={radarMode}
-                onChange={setRadarMode}
-              />
-            </div>
+                <div className="flex flex-col items-start justify-between gap-2.5 sm:flex-row sm:items-center">
+                  <div>
+                    <h2 className="m-0 text-sm leading-snug font-semibold tracking-[-0.02em] text-foreground sm:text-[15px]">
+                      Mapa del Año Actual
+                    </h2>
+                    <p className="mt-0.5 text-[11.5px] leading-[1.45] text-muted-foreground">
+                      {hasSubjects
+                        ? `${data.gradeYear ? `${data.gradeYear}.º Año · ` : ""}${data.subjectsSummary.length} área(s) inscrita(s) · Haz clic en una materia para abrirla`
+                        : "Sin asignaturas inscritas en el período vigente"}
+                    </p>
+                  </div>
 
-            <AcademicRadar
-              values={radarData.values}
-              axis={radarData.axis}
-              periodLabel={
-                radarMode === 0 ? "Por asignatura" : "Indicadores globales"
-              }
-              color="var(--ab-radar)"
-              tip={tip}
-            />
-          </div>
-
-          <div>
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              <div className="siga-glass-inner rounded-2xl border p-3.5">
-                <div className="text-xs leading-normal text-muted-foreground">
-                  Materias aprobadas
+                  {/* Selector compacto de los 3 Momentos Pedagógicos */}
+                  <div
+                    role="group"
+                    aria-label="Seleccionar momento pedagógico"
+                    className="siga-glass-inner inline-flex items-center gap-0.5 rounded-xl border p-0.5"
+                  >
+                    {periodTabs.map((p, i) => (
+                      <button
+                        key={p.label}
+                        type="button"
+                        aria-pressed={i === periodIdx}
+                        onClick={() => setPeriodIdx(i)}
+                        className={cn(
+                          "cursor-pointer rounded-lg px-2.5 py-1 text-[11px] font-medium transition-all focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none",
+                          i === periodIdx
+                            ? "bg-primary text-primary-foreground shadow-xs"
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        {p.momentNumber}.º Mom.
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="font-kpi-num mt-2 text-2xl leading-[1.15] font-light text-foreground">
-                  <CountUp
-                    value={
-                      gradedList.filter((s) => s.finalNumeric >= 10).length
-                    }
-                  />
-                  <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                    / {data.enrolledSubjectsCount}
+
+                <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-[10.5px] leading-normal text-muted-foreground">
+                  <div className="flex flex-wrap gap-x-3 gap-y-1">
+                    {CURRICULUM_GROUPS.map((g) => (
+                      <span
+                        key={g.id}
+                        className="inline-flex items-center gap-1.5"
+                      >
+                        <i
+                          className="size-2 rounded-[2px]"
+                          style={{ background: g.color }}
+                        />
+                        {g.name}
+                      </span>
+                    ))}
+                  </div>
+                  <span className="tabular-nums">
+                    {periodTabs[periodIdx]?.label} ·{" "}
+                    {periodTabs[periodIdx]?.compare}
                   </span>
                 </div>
               </div>
 
-              <div className="siga-glass-inner rounded-2xl border p-3.5">
-                <div className="text-xs leading-normal text-muted-foreground">
-                  Avance del lapso
-                </div>
-                <div className="font-kpi-num mt-2 text-2xl leading-[1.15] font-light text-foreground">
-                  <CountUp value={data.completionPercent} suffix="%" />
-                </div>
-              </div>
-            </div>
+              <CurriculumTreemap
+                items={treemapItems}
+                periodLabel={periodTabs[periodIdx]?.label ?? "1.º Momento"}
+                tip={tip}
+                compact
+              />
+            </section>
 
-            <div className="mt-4 text-xs leading-normal">
-              <div className="flex justify-between border-t border-border/60 py-2.5">
-                <span className="text-muted-foreground">Mención técnica</span>
-                <span className="font-medium text-foreground">
-                  {data.mencionName ?? "Pendiente por asignar"}
+            {/* TARJETA D: Radar de Competencias del Año Actual (compacto y nivelado) */}
+            <section
+              aria-label="Radar de competencias académicas"
+              className="siga-glass-surface col-span-12 flex flex-col justify-between rounded-[24px] border p-4 sm:p-5 lg:col-span-5"
+            >
+              <div className="flex items-start justify-between gap-2.5">
+                <div>
+                  <h2 className="m-0 text-sm leading-snug font-semibold tracking-[-0.02em] text-foreground sm:text-[15px]">
+                    Balance de Competencias
+                  </h2>
+                  <p className="mt-0.5 text-[11.5px] leading-[1.45] text-muted-foreground">
+                    {radarMode === 0
+                      ? `${periodTabs[periodIdx]?.label ?? "Lapso actual"} · Escala 1–20`
+                      : "Indicadores globales del año actual"}
+                  </p>
+                </div>
+                <Segmented
+                  label="Vista del radar"
+                  items={["Materias", "Global"]}
+                  value={radarMode}
+                  onChange={setRadarMode}
+                />
+              </div>
+
+              <AcademicRadar
+                values={radarData.values}
+                axis={radarData.axis}
+                periodLabel={
+                  radarMode === 0
+                    ? (periodTabs[periodIdx]?.label ?? "Por asignatura")
+                    : "Indicadores globales"
+                }
+                color="var(--ab-radar)"
+                tip={tip}
+                compact
+              />
+
+              <div className="mt-1 flex items-center justify-between border-t border-border/50 pt-2.5 text-[11px] text-muted-foreground">
+                <span>Avance evaluado del lapso</span>
+                <span className="font-semibold tabular-nums text-foreground">
+                  {data.completionPercent}% ({gradedList.length}/
+                  {data.enrolledSubjectsCount})
                 </span>
               </div>
-              <div className="flex justify-between border-t border-border/60 py-2.5">
-                <span className="text-muted-foreground">Año y sección</span>
-                <span className="font-medium tabular-nums text-foreground">
-                  {data.hasEnrollment
-                    ? `${data.gradeYear}.º Año · Sección ${data.sectionLetter ?? "—"}`
-                    : "Sin sección activa"}
-                </span>
-              </div>
-              <div className="flex justify-between border-t border-border/60 py-2.5">
-                <span className="text-muted-foreground">
-                  Próximas evaluaciones
-                </span>
-                <span className="font-medium tabular-nums text-foreground">
-                  {data.upcomingEvaluations.length} programada(s)
-                </span>
-              </div>
-            </div>
-          </div>
-        </section>
+            </section>
           </>
         ) : null}
       </div>

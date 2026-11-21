@@ -33,6 +33,10 @@ export default async function EstudianteAsignaturaDetailPage({
     redirect(ROLE_HOME_PATH[profile.primaryRole] ?? "/");
   }
 
+  if (profile.accessTier !== "verified_workspace") {
+    redirect("/estudiante");
+  }
+
   const data = await getStudentSubjectDetailData(profile, resolvedParams.codigo);
   if (!data) {
     notFound();

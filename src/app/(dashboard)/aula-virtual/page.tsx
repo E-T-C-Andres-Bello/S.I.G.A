@@ -29,6 +29,13 @@ export default async function AulaVirtualPage({
     redirect(ROLE_HOME_PATH[profile.primaryRole] ?? "/");
   }
 
+  if (
+    profile.primaryRole === "estudiante" &&
+    profile.accessTier !== "verified_workspace"
+  ) {
+    redirect("/estudiante");
+  }
+
   const campusData = await getAulaVirtualCampusData(profile);
   const initialSection: MoodleWorkspaceSection =
     params.seccion === "courses" || params.seccion === "cursos"

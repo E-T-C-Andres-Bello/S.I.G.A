@@ -100,3 +100,29 @@ export async function listInstitutionalPasskeys(): Promise<PasskeyFactorSummary[
       })
     );
 }
+
+/**
+ * Elimina una llave biométrica WebAuthn previamente registrada en la cuenta del usuario.
+ */
+export async function unenrollInstitutionalPasskey(
+  factorId: string
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const supabase = getBrowserSupabaseClient();
+  if (!supabase) {
+    return {
+      ok: false,
+      message: "El servicio de autenticación no está disponible en este momento.",
+    };
+  }
+
+  const { error } = await supabase.auth.mfa.unenroll({ factorId });
+  if (error) {
+    return {
+      ok: false,
+      message:
+        "No se pudo desvincular la llave biométrica en este momento. Intenta nuevamente.",
+    };
+  }
+
+  return { ok: true };
+}

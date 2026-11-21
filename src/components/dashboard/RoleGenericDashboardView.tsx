@@ -200,7 +200,7 @@ const ROLE_SPECS: Record<RoleWorkspaceKey, RoleModuleSpec> = {
     modulesList: [
       {
         title: "Rendimiento por Mención (`menciones` & `moment_final_grades`)",
-        detail: "Comparativa entre Aduanas, Administración y Telemática.",
+        detail: "Comparativa entre Aduana, Turismo y Telemática.",
         status: "Esquema listo",
       },
       {

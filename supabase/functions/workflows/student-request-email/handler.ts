@@ -143,7 +143,7 @@ function buildStudentReceiptTemplate(params: {
     params.reason ? `- Detalle indicado: ${params.reason}` : null,
     "",
     nextStepsText,
-    `Seguimiento en línea: ${portalUrl}/estudiante?tab=tramites`,
+    `Seguimiento en línea: ${portalUrl}/estudiante/tramites`,
   ]
     .filter((line): line is string => line !== null)
     .join("\n");
@@ -192,7 +192,7 @@ function buildStudentReceiptTemplate(params: {
           </table>
           <p style="margin:18px 0 16px;color:#334155;">${escapeHtml(nextStepsText)}</p>
           <p style="margin:0;">
-            <a href="${escapeHtml(portalUrl)}/estudiante?tab=tramites" style="display:inline-block;padding:10px 18px;border-radius:999px;background:#1c47c4;color:#ffffff;text-decoration:none;font-weight:600;font-size:13px;">
+            <a href="${escapeHtml(portalUrl)}/estudiante/tramites" style="display:inline-block;padding:10px 18px;border-radius:999px;background:#1c47c4;color:#ffffff;text-decoration:none;font-weight:600;font-size:13px;">
               Ver estado en el Portal
             </a>
           </p>
@@ -497,7 +497,7 @@ export async function handleStudentRequestEmailWorkflow(
         category: "request_status",
         title: `Solicitud registrada: ${requestLabel}`,
         body: `Tu trámite (${requestCode}) quedó registrado en estado Pendiente.`,
-        action_url: "/estudiante?tab=tramites",
+        action_url: "/estudiante/tramites",
       })
       .select("id")
       .maybeSingle<{ id: string }>();

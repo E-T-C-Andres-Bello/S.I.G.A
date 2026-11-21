@@ -7,13 +7,18 @@ import {
 } from "../grade-simulator";
 import {
   classifyCurriculumAxis,
+  formatCurriculumWorkload,
   getSubjectProgressionContext,
   resolveCurriculumNodeStatus,
 } from "../curriculum-tracks";
 import { computeStudentMedals } from "../medals";
 import {
   isQaStudentSandboxProfile,
+  normalizeEmergencyCedula,
   recoveryEmailSchema,
+  studentAvatarUrlSchema,
+  studentPasswordChangeSchema,
+  studentProfileContactSchema,
   studentRequestCreateSchema,
   verificationCodeSchema,
 } from "../../../lib/validators/student-portal";
@@ -32,6 +37,28 @@ import {
   detectsDirectHomeworkSolveAttempt,
 } from "../../../lib/ai/socratic-tutor-guard";
 import { redactSigaPii } from "../../../lib/analytics/sentry-scrub";
+import {
+  formatRelativeNotificationTime,
+  normalizeNotificationCategory,
+  resolveNotificationDateBucket,
+  sanitizeNotificationActionUrl,
+} from "../../notificaciones/notification-meta";
+import {
+  buildStudentAcademicHistory,
+  formatPromedioDisplay,
+} from "../academic-history";
+import {
+  buildScheduleMatrix,
+  formatCompact12hTime,
+  formatCompactTeacherLabel,
+  formatScheduleBannerTitle,
+  parseTimeToMinutes,
+} from "../schedule-grid";
+import {
+  buildAttendanceCalendarMonth,
+  computeAttendanceHealth,
+  resolveLiveSchoolDayPulse,
+} from "../attendance-metrics";
 
 test("computeMppeFinalNumeric clamps and rounds according to MPPE scale 1-20", () => {
   assert.equal(computeMppeFinalNumeric(0.2), 1);
@@ -399,9 +426,24 @@ test("RBAC matrix and Socratic Tutor / Anti-Fraud helpers enforce institutional 
 });
 
 test("curriculum tracks classify axes, resolve node status honestly, and build progression chains", () => {
-  assert.equal(classifyCurriculumAxis("TEL-RED", true).id, "nucleo_tecnico");
-  assert.equal(classifyCurriculumAxis("CRP", false).id, "identidad_bienestar");
-  assert.equal(classifyCurriculumAxis("MAT", false).id, "formacion_comun");
+  assert.equal(
+    classifyCurriculumAxis("TEL-PDSR", true, "formacion_cientifica_tecnologica").id,
+    "formacion_cientifica_tecnologica"
+  );
+  assert.equal(
+    classifyCurriculumAxis("IDI", false, "formacion_cientifica_tecnologica").id,
+    "formacion_cientifica_tecnologica"
+  );
+  assert.equal(
+    classifyCurriculumAxis("OVS", false, "practica_vocacional_profesional").id,
+    "practica_vocacional_profesional"
+  );
+  assert.equal(
+    classifyCurriculumAxis("MAT", false, "formacion_general").id,
+    "formacion_general"
+  );
+  assert.equal(formatCurriculumWorkload(0, 1440), "1440 h/año");
+  assert.equal(formatCurriculumWorkload(42, null), "42 h/sem");
 
   assert.equal(
     resolveCurriculumNodeStatus({
@@ -460,15 +502,516 @@ test("curriculum tracks classify axes, resolve node status honestly, and build p
   );
 
   const lookup = new Map([
-    ["TEL-OFI", { name: "Ofimática", gradeYears: [1, 2] }],
-    ["TEL-ARQ", { name: "Arquitectura Hardware", gradeYears: [3] }],
-    ["TEL-RED", { name: "Redes de Datos", gradeYears: [4, 5] }],
-    ["TEL-SEG", { name: "Seguridad LAN y Pasantías", gradeYears: [6] }],
+    ["PEST", { name: "Proyecto de Economía Socioproductiva y Tecnología", gradeYears: [1, 2, 3, 4, 5] }],
+    ["TEL-PDSR", { name: "Programación y Diseño de Software y Redes", gradeYears: [1, 2, 3, 4, 5] }],
+    ["OVS", { name: "Orientación y Vinculación Sociolaboral", gradeYears: [1, 2, 3, 4, 5] }],
+    ["PPRO", { name: "Práctica Profesional", gradeYears: [6] }],
   ]);
 
-  const ctx = getSubjectProgressionContext("TELEMATICA", "TEL-ARQ", lookup);
+  const ctx = getSubjectProgressionContext("TELEMATICA", "TEL-PDSR", lookup);
   assert.ok(ctx);
   assert.equal(ctx.currentIndex, 1);
   assert.equal(ctx.nodes.length, 4);
-  assert.equal(ctx.nodes[2]?.subjectCode, "TEL-RED");
+  assert.equal(ctx.nodes[3]?.subjectCode, "PPRO");
+});
+
+test("student profile schemas validate contact, emergency cedula, avatar URLs, and passwords", () => {
+  assert.equal(normalizeEmergencyCedula("12345678"), "V12345678");
+  assert.equal(normalizeEmergencyCedula("e-20.111.222"), "E20111222");
+
+  const validProfile = studentProfileContactSchema.safeParse({
+    phone: "0414-5556677",
+    recoveryEmail: "personal@gmail.com",
+    emergencyContactName: "María Pérez",
+    emergencyContactCedula: "15222333",
+    emergencyContactPhone: "+58 424-1112233",
+    emergencyContactRelationship: "Madre",
+  });
+  assert.equal(validProfile.success, true);
+  if (validProfile.success) {
+    assert.equal(validProfile.data.emergencyContactCedula, "V15222333");
+  }
+
+  assert.equal(
+    studentProfileContactSchema.safeParse({
+      phone: "0414-5556677",
+      recoveryEmail: "alumno@etcandresbello.org",
+      emergencyContactName: "",
+      emergencyContactCedula: "",
+      emergencyContactPhone: "",
+      emergencyContactRelationship: "",
+    }).success,
+    false
+  );
+
+  assert.equal(
+    studentAvatarUrlSchema.safeParse(
+      "https://isyrpjgxndfpfcswnmkd.supabase.co/storage/v1/object/public/student-avatars/550e8400-e29b-41d4-a716-446655440000/avatar.webp?v=1795200000000"
+    ).success,
+    true
+  );
+  assert.equal(studentAvatarUrlSchema.safeParse(null).success, true);
+  assert.equal(
+    studentAvatarUrlSchema.safeParse("https://evil.example.com/pixel.png")
+      .success,
+    false
+  );
+
+  assert.equal(
+    studentPasswordChangeSchema.safeParse({
+      newPassword: "ClaveSegura2026",
+      confirmPassword: "ClaveSegura2026",
+    }).success,
+    true
+  );
+  assert.equal(
+    studentPasswordChangeSchema.safeParse({
+      newPassword: "weak",
+      confirmPassword: "weak",
+    }).success,
+    false
+  );
+  assert.equal(
+    studentPasswordChangeSchema.safeParse({
+      newPassword: "ClaveSegura2026",
+      confirmPassword: "OtraClave2026",
+    }).success,
+    false
+  );
+});
+
+test("notification helpers sanitize URLs against open redirects and format relative buckets", () => {
+  assert.equal(
+    sanitizeNotificationActionUrl("/estudiante?tab=tramites"),
+    "/estudiante/tramites"
+  );
+  assert.equal(
+    sanitizeNotificationActionUrl("/aula-virtual"),
+    "/aula-virtual"
+  );
+  assert.equal(
+    sanitizeNotificationActionUrl("https://evil.example.com"),
+    null
+  );
+  assert.equal(sanitizeNotificationActionUrl("//evil.example.com"), null);
+  assert.equal(sanitizeNotificationActionUrl("javascript:alert(1)"), null);
+
+  assert.equal(normalizeNotificationCategory("academic_grade"), "academic_grade");
+  assert.equal(normalizeNotificationCategory("desconocida"), "request_status");
+
+  const fixedNow = Date.parse("2026-11-20T16:00:00-04:00");
+  assert.equal(
+    formatRelativeNotificationTime("2026-11-20T15:55:00-04:00", fixedNow),
+    "Hace 5 min"
+  );
+  assert.equal(
+    resolveNotificationDateBucket("2026-11-20T10:00:00-04:00", fixedNow),
+    "Hoy"
+  );
+  assert.equal(
+    resolveNotificationDateBucket("2026-11-19T14:00:00-04:00", fixedNow),
+    "Ayer"
+  );
+});
+
+test("buildStudentAcademicHistory computes real cumulative GPA, multi-year periods, literals, and pending recoveries", () => {
+  const empty = buildStudentAcademicHistory({
+    enrollments: [],
+    curriculumSubjects: [],
+    momentGrades: [],
+    pendingAttempts: [],
+  });
+  assert.equal(empty.overallCumulativeAverage, null);
+  assert.equal(empty.currentYearAverage, null);
+  assert.equal(empty.totalApprovedSubjectsCount, 0);
+  assert.equal(empty.pendingRecoveryCount, 0);
+  assert.equal(formatPromedioDisplay(null), "—");
+
+  const history = buildStudentAcademicHistory({
+    enrollments: [
+      {
+        enrollmentId: "enr-2025",
+        schoolYearId: "sy-2025",
+        schoolYearCode: "2025-2026",
+        schoolYearName: "2025–2026",
+        startDate: "2025-09-15",
+        isCurrent: false,
+        gradeYear: 4,
+        sectionLetter: "A",
+        mencionId: "m-tel",
+        mencionCode: "TELEMATICA",
+        mencionName: "Telemática",
+        mencionSpecialty: "Industrial",
+        enrollmentStatus: "promoted",
+      },
+      {
+        enrollmentId: "enr-2026",
+        schoolYearId: "sy-2026",
+        schoolYearCode: "2026-2027",
+        schoolYearName: "2026–2027",
+        startDate: "2026-09-15",
+        isCurrent: true,
+        gradeYear: 5,
+        sectionLetter: "A",
+        mencionId: "m-tel",
+        mencionCode: "TELEMATICA",
+        mencionName: "Telemática",
+        mencionSpecialty: "Industrial",
+        enrollmentStatus: "active",
+      },
+    ],
+    curriculumSubjects: [
+      {
+        curriculumSubjectId: "cs-4-mat",
+        mencionId: "m-tel",
+        gradeYear: 4,
+        subjectCode: "MAT",
+        subjectName: "Matemática",
+        weeklyHours: 4,
+        annualHours: null,
+        displayOrder: 1,
+        gradingScale: "NUMERIC_1_20",
+        passingThreshold: 10,
+        isTechnicalCore: false,
+      },
+      {
+        curriculumSubjectId: "cs-4-fis",
+        mencionId: "m-tel",
+        gradeYear: 4,
+        subjectCode: "FIS",
+        subjectName: "Física",
+        weeklyHours: 4,
+        annualHours: null,
+        displayOrder: 2,
+        gradingScale: "NUMERIC_1_20",
+        passingThreshold: 10,
+        isTechnicalCore: false,
+      },
+      {
+        curriculumSubjectId: "cs-4-ovs",
+        mencionId: "m-tel",
+        gradeYear: 4,
+        subjectCode: "OVS",
+        subjectName: "Orientación y Vinculación Sociolaboral",
+        weeklyHours: 2,
+        annualHours: null,
+        displayOrder: 3,
+        gradingScale: "LITERAL_A_E",
+        passingThreshold: 10,
+        isTechnicalCore: false,
+      },
+      {
+        curriculumSubjectId: "cs-5-mat",
+        mencionId: "m-tel",
+        gradeYear: 5,
+        subjectCode: "MAT",
+        subjectName: "Matemática",
+        weeklyHours: 4,
+        annualHours: null,
+        displayOrder: 1,
+        gradingScale: "NUMERIC_1_20",
+        passingThreshold: 10,
+        isTechnicalCore: false,
+      },
+      {
+        curriculumSubjectId: "cs-5-tel",
+        mencionId: "m-tel",
+        gradeYear: 5,
+        subjectCode: "TEL-PDSR",
+        subjectName: "Programación y Diseño de Software y Redes",
+        weeklyHours: 8,
+        annualHours: null,
+        displayOrder: 2,
+        gradingScale: "NUMERIC_1_20",
+        passingThreshold: 10,
+        isTechnicalCore: true,
+      },
+    ],
+    momentGrades: [
+      // 2025-2026: MAT (14, 15, 16 -> 15), FIS (8, 9, 8 -> 8 -> recuperada con 13), OVS (A, A, A -> A)
+      { enrollmentId: "enr-2025", curriculumSubjectId: "cs-4-mat", momentNumber: 1, finalNumeric: 14, finalLiteral: null, isLocked: true },
+      { enrollmentId: "enr-2025", curriculumSubjectId: "cs-4-mat", momentNumber: 2, finalNumeric: 15, finalLiteral: null, isLocked: true },
+      { enrollmentId: "enr-2025", curriculumSubjectId: "cs-4-mat", momentNumber: 3, finalNumeric: 16, finalLiteral: null, isLocked: true },
+      { enrollmentId: "enr-2025", curriculumSubjectId: "cs-4-fis", momentNumber: 1, finalNumeric: 8, finalLiteral: null, isLocked: true },
+      { enrollmentId: "enr-2025", curriculumSubjectId: "cs-4-fis", momentNumber: 2, finalNumeric: 9, finalLiteral: null, isLocked: true },
+      { enrollmentId: "enr-2025", curriculumSubjectId: "cs-4-fis", momentNumber: 3, finalNumeric: 8, finalLiteral: null, isLocked: true },
+      { enrollmentId: "enr-2025", curriculumSubjectId: "cs-4-ovs", momentNumber: 3, finalNumeric: null, finalLiteral: "A", isLocked: true },
+      // 2026-2027 (actual): MAT (18 en I Mom -> en curso), TEL-PDSR (sin notas aún)
+      { enrollmentId: "enr-2026", curriculumSubjectId: "cs-5-mat", momentNumber: 1, finalNumeric: 18, finalLiteral: null, isLocked: true },
+    ],
+    pendingAttempts: [
+      {
+        id: "pa-1",
+        curriculumSubjectId: "cs-4-fis",
+        subjectCode: "FIS",
+        subjectName: "Física",
+        attemptNumber: 1,
+        examDate: "2026-07-20",
+        finalNumeric: 13,
+        passed: true,
+      },
+    ],
+  });
+
+  // Orden: período actual primero
+  assert.equal(history.periods.length, 2);
+  assert.equal(history.periods[0]?.isCurrent, true);
+  assert.equal(history.periods[0]?.enrollmentStatusLabel, "Actual");
+  assert.equal(history.periods[1]?.enrollmentStatusLabel, "Promovido");
+
+  // Año actual: MAT=18 (en curso), TEL-PDSR=sin notas -> promedio actual 18.00
+  assert.equal(history.currentYearAverage, 18);
+  assert.equal(history.periods[0]?.subjects[0]?.status, "in_progress");
+  assert.equal(history.periods[0]?.subjects[1]?.status, "in_progress");
+
+  // Año 2025-2026: MAT=15, FIS=13 (recuperada), OVS=A (literal aprobada) -> promedio período = (15+13)/2 = 14.00
+  const period2025 = history.periods[1]!;
+  assert.equal(period2025.periodAverage, 14);
+  assert.equal(period2025.passedCount, 3);
+  const fisRow = period2025.subjects.find((s) => s.subjectCode === "FIS");
+  assert.equal(fisRow?.recoveredViaPending, true);
+  assert.equal(fisRow?.definitiveNumeric, 13);
+  assert.equal(fisRow?.status, "approved");
+
+  // Promedio general acumulado: (18 + 15 + 13) / 3 = 15.33
+  assert.equal(history.overallCumulativeAverage, 15.33);
+  assert.equal(formatPromedioDisplay(history.overallCumulativeAverage), "15.33");
+  assert.equal(history.totalApprovedSubjectsCount, 4);
+  assert.equal(history.pendingRecoveryCount, 0);
+});
+
+test("buildScheduleMatrix builds dynamic slots, merges consecutive blocks, detects RECESO, and formats 12h labels", () => {
+  assert.equal(formatCompact12hTime(parseTimeToMinutes("07:00")), "7:00");
+  assert.equal(formatCompact12hTime(parseTimeToMinutes("12:35")), "12:35");
+  assert.equal(formatCompact12hTime(parseTimeToMinutes("13:15")), "1:15");
+  assert.equal(formatCompact12hTime(parseTimeToMinutes("18:00")), "6:00");
+
+  assert.equal(
+    formatScheduleBannerTitle({
+      gradeYear: 4,
+      mencionName: "Telemática",
+      sectionLetter: "A",
+    }),
+    "4TO AÑO TLM A"
+  );
+  assert.equal(
+    formatScheduleBannerTitle({
+      gradeYear: 1,
+      mencionName: "Aduana",
+      sectionLetter: "B",
+    }),
+    "1ER AÑO ADU B"
+  );
+  assert.equal(formatCompactTeacherLabel("Prof. Keyla Sulbarán"), "KEYLA SULBARÁN");
+
+  const grid = buildScheduleMatrix([
+    {
+      id: "b1",
+      dayOfWeek: 5,
+      blockLabel: "Bloque 8",
+      startTime: "11:50",
+      endTime: "12:30",
+      roomLabel: "A-10",
+      subjectCode: "IDI",
+      subjectName: "Idiomas",
+      teacherName: "Prof. Eduardo Brito",
+    },
+    {
+      id: "b2",
+      dayOfWeek: 1,
+      blockLabel: "Bloque 9",
+      startTime: "12:35",
+      endTime: "13:15",
+      roomLabel: "LAB. TLM 2",
+      subjectCode: "TEL-PDSR",
+      subjectName: "Programación y Diseño de Software y Redes",
+      teacherName: "Profa. Keyla Sulbarán",
+    },
+    {
+      id: "b3",
+      dayOfWeek: 1,
+      blockLabel: "Bloque 10",
+      startTime: "13:15",
+      endTime: "13:55",
+      roomLabel: "LAB. TLM 2",
+      subjectCode: "TEL-PDSR",
+      subjectName: "Programación y Diseño de Software y Redes",
+      teacherName: "Profa. Keyla Sulbarán",
+    },
+    {
+      id: "b4",
+      dayOfWeek: 2,
+      blockLabel: "Bloque 9",
+      startTime: "12:35",
+      endTime: "13:15",
+      roomLabel: "A-10",
+      subjectCode: "MAT",
+      subjectName: "Matemática",
+      teacherName: "Prof. José Farías",
+    },
+  ]);
+
+  // Band 0: slot 11:50-12:30; Band 1: RECESO 12:30-12:35; Band 2: slots 12:35-1:15 y 1:15-1:55
+  assert.equal(grid.bands.length, 3);
+  assert.equal(grid.totalRecessRows, 1);
+  assert.equal(grid.totalSlotRows, 3);
+  assert.equal(grid.primaryRoomLabel, "A-10");
+
+  const recess = grid.bands[1];
+  assert.equal(recess?.kind, "recess");
+  if (recess?.kind === "recess") {
+    assert.equal(recess.startLabel, "12:30");
+    assert.equal(recess.endLabel, "12:35");
+  }
+
+  const afternoonBand = grid.bands[2];
+  assert.equal(afternoonBand?.kind, "slots");
+  if (afternoonBand?.kind === "slots") {
+    // Lunes fusiona bloques 9 y 10 en una sola celda de rowSpan=2
+    const mondayCells = afternoonBand.columnsByDay[1] ?? [];
+    assert.equal(mondayCells.length, 1);
+    assert.equal(mondayCells[0]?.rowSpan, 2);
+    assert.equal(mondayCells[0]?.block?.subjectCode, "TEL-PDSR");
+
+    // Martes tiene MAT en bloque 9 (rowSpan=1) y celda vacía en bloque 10 (rowSpan=1)
+    const tuesdayCells = afternoonBand.columnsByDay[2] ?? [];
+    assert.equal(tuesdayCells.length, 2);
+    assert.equal(tuesdayCells[0]?.rowSpan, 1);
+    assert.equal(tuesdayCells[1]?.block, null);
+  }
+});
+
+test("computeAttendanceHealth enforces MPPE 75% traffic light and exact margin/recovery math", () => {
+  const empty = computeAttendanceHealth({
+    presentCount: 0,
+    lateCount: 0,
+    justifiedCount: 0,
+    absentCount: 0,
+  });
+  assert.equal(empty.healthLevel, "neutral");
+  assert.equal(empty.attendancePercent, null);
+
+  // 10/10 = 100% -> green, tolera 3 faltas (10/13 = 76.9% >= 75%, 10/14 = 71.4% < 75%)
+  const optimal = computeAttendanceHealth({
+    presentCount: 8,
+    lateCount: 1,
+    justifiedCount: 1,
+    absentCount: 0,
+  });
+  assert.equal(optimal.healthLevel, "green");
+  assert.equal(optimal.attendancePercent, 100);
+  assert.equal(optimal.allowedAdditionalAbsences, 3);
+  assert.equal(optimal.sessionsNeededToRecover, 0);
+
+  // 3/4 = 75% exacto -> amber, 0 faltas adicionales tolerables
+  const edge75 = computeAttendanceHealth({
+    presentCount: 3,
+    lateCount: 0,
+    justifiedCount: 0,
+    absentCount: 1,
+  });
+  assert.equal(edge75.healthLevel, "amber");
+  assert.equal(edge75.attendancePercent, 75);
+  assert.equal(edge75.allowedAdditionalAbsences, 0);
+
+  // 2/4 = 50% -> red, necesita 4 asistencias seguidas (6/8 = 75%)
+  const risk = computeAttendanceHealth({
+    presentCount: 2,
+    lateCount: 0,
+    justifiedCount: 0,
+    absentCount: 2,
+  });
+  assert.equal(risk.healthLevel, "red");
+  assert.equal(risk.attendancePercent, 50);
+  assert.equal(risk.allowedAdditionalAbsences, 0);
+  assert.equal(risk.sessionsNeededToRecover, 4);
+});
+
+test("resolveLiveSchoolDayPulse detects active class, teacher absence match, and monthly calendar dominant status", () => {
+  const pulse = resolveLiveSchoolDayPulse({
+    scheduleBlocks: [
+      {
+        id: "s1",
+        dayOfWeek: 5,
+        blockLabel: "Bloque 1-2",
+        startTime: "07:00",
+        endTime: "08:30",
+        roomLabel: "Lab. Informática",
+        subjectCode: "TEL-PDSR",
+        subjectName: "Programación y Diseño de Software y Redes",
+        teacherName: "Prof. Ana Morales",
+      },
+      {
+        id: "s2",
+        dayOfWeek: 5,
+        blockLabel: "Bloque 3-4",
+        startTime: "09:00",
+        endTime: "10:30",
+        roomLabel: "Aula 5-A",
+        subjectCode: "MAT",
+        subjectName: "Matemática",
+        teacherName: "Prof. José Farías",
+      },
+    ],
+    teacherAbsences: [
+      {
+        id: "abs-1",
+        absenceDate: "2026-11-20",
+        teacherName: "Prof. Ana Morales",
+        subjectCodes: ["TEL-PDSR"],
+        subjectNames: ["Programación y Diseño de Software y Redes"],
+        affectedBlocks: ["Bloque 1-2"],
+        status: "reorganized",
+      },
+    ],
+    todayIso: "2026-11-20",
+    weekday: 5,
+    currentMinutes: 7 * 60 + 45, // 7:45 AM -> mitad del Bloque 1-2
+  });
+
+  assert.equal(pulse.phase, "in_class");
+  assert.equal(pulse.currentBlock?.subjectCode, "TEL-PDSR");
+  assert.equal(pulse.currentBlockProgressPercent, 50);
+  assert.equal(pulse.currentBlockRemainingMinutes, 45);
+  assert.equal(pulse.currentBlock?.hasTeacherAbsence, true);
+  assert.equal(pulse.nextBlock?.subjectCode, "MAT");
+  assert.equal(pulse.todayAbsenceAlerts.length, 1);
+
+  const cal = buildAttendanceCalendarMonth({
+    year: 2026,
+    monthIndex0: 10, // Noviembre 2026
+    todayIso: "2026-11-20",
+    sessions: [
+      {
+        recordId: "r1",
+        sessionDate: "2026-11-18",
+        blockLabel: "Bloque 1-2",
+        momentNumber: 1,
+        momentName: "1.º Momento",
+        subjectCode: "MAT",
+        subjectName: "Matemática",
+        teacherName: "Prof. José Farías",
+        status: "present",
+        note: null,
+      },
+      {
+        recordId: "r2",
+        sessionDate: "2026-11-18",
+        blockLabel: "Bloque 3-4",
+        momentNumber: 1,
+        momentName: "1.º Momento",
+        subjectCode: "TEL-PDSR",
+        subjectName: "Programación y Diseño de Software y Redes",
+        teacherName: "Prof. Ana Morales",
+        status: "absent",
+        note: null,
+      },
+    ],
+  });
+
+  assert.equal(cal.totalSessionsInMonth, 2);
+  assert.equal(cal.absentInMonth, 1);
+  const nov18 = cal.days.find((d) => d.dateIso === "2026-11-18");
+  assert.equal(nov18?.dominantStatus, "absent");
+  assert.equal(nov18?.sessions.length, 2);
 });

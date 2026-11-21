@@ -91,6 +91,101 @@ export const verificationCodeSchema = z
     "Código inválido. Debe iniciar con SIGA- seguido de al menos 6 caracteres alfanuméricos."
   );
 
+const optionalPhoneSchema = z
+  .string()
+  .trim()
+  .transform((v) => (v === "" ? null : v))
+  .nullable()
+  .refine(
+    (v) => v === null || (v.length >= 7 && v.length <= 24 && /^[+0-9()\-\s]+$/.test(v)),
+    "Ingresa un número de teléfono válido (ej. 0414-1234567 o +58 414 1234567)."
+  );
+
+export function normalizeEmergencyCedula(raw: string): string {
+  const cleaned = raw.trim().toUpperCase().replace(/[^VEJ0-9]/g, "");
+  if (/^[0-9]{6,9}$/.test(cleaned)) {
+    return `V${cleaned}`;
+  }
+  return cleaned;
+}
+
+export const studentProfileContactSchema = z.object({
+  phone: optionalPhoneSchema,
+  recoveryEmail: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .transform((v) => (v === "" ? null : v))
+    .nullable()
+    .refine(
+      (v) => v === null || recoveryEmailSchema.safeParse(v).success,
+      "Usa un correo personal válido distinto a @etcandresbello.org."
+    ),
+  emergencyContactName: z
+    .string()
+    .trim()
+    .transform((v) => (v === "" ? null : v))
+    .nullable()
+    .refine(
+      (v) => v === null || (v.length >= 3 && v.length <= 120),
+      "El nombre del contacto de emergencia debe tener entre 3 y 120 caracteres."
+    ),
+  emergencyContactCedula: z
+    .string()
+    .trim()
+    .transform((v) => {
+      const normalized = normalizeEmergencyCedula(v);
+      return normalized === "" ? null : normalized;
+    })
+    .nullable()
+    .refine(
+      (v) => v === null || /^[VEJ][0-9]{6,9}$/.test(v),
+      "La cédula del contacto de emergencia debe tener formato válido (ej. V-12345678)."
+    ),
+  emergencyContactPhone: optionalPhoneSchema,
+  emergencyContactRelationship: z
+    .string()
+    .trim()
+    .transform((v) => (v === "" ? null : v))
+    .nullable()
+    .refine(
+      (v) => v === null || v.length <= 60,
+      "El parentesco no puede superar los 60 caracteres."
+    ),
+});
+
+export type StudentProfileContactInput = z.input<typeof studentProfileContactSchema>;
+export type StudentProfileContactParsed = z.output<typeof studentProfileContactSchema>;
+
+export const studentAvatarUrlSchema = z
+  .string()
+  .trim()
+  .max(512, "La dirección de la fotografía excede el límite permitido.")
+  .regex(
+    /^https:\/\/[a-z0-9.-]+\/storage\/v1\/object\/public\/student-avatars\/[0-9a-f-]{36}\/avatar\.webp(\?v=[0-9]{1,16})?$/i,
+    "La fotografía debe estar alojada en el repositorio institucional en formato WebP."
+  )
+  .nullable();
+
+export const studentPasswordChangeSchema = z
+  .object({
+    newPassword: z
+      .string()
+      .min(8, "La nueva contraseña debe tener al menos 8 caracteres.")
+      .max(72, "La contraseña no puede superar los 72 caracteres.")
+      .refine(
+        (v) => /[A-Z]/.test(v) && /[a-z]/.test(v) && /[0-9]/.test(v),
+        "Incluye al menos una letra mayúscula, una minúscula y un número."
+      ),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    path: ["confirmPassword"],
+    message: "Las contraseñas no coinciden.",
+  });
+
+export type StudentPasswordChangeInput = z.infer<typeof studentPasswordChangeSchema>;
+
 export type StudentRequestCreateInput = z.infer<typeof studentRequestCreateSchema>;
 
 export const QA_STUDENT_EMAIL = "estudiante@etcandresbello.org";
