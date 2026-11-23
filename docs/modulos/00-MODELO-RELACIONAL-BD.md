@@ -6,11 +6,11 @@ Este documento define el **diseño relacional definitivo** de **S.I.G.A.** antes
 
 ## 1. Principios Arquitectónicos y Reglas de Integridad
 
-1. **Separación de Motores (Supabase OLTP vs. Neon Secundario/Labs):**
-   - **Supabase PostgreSQL (Motor Primario OLTP):** Fuente única de verdad transaccional, autenticación JWT/Cookies (`auth.users` ↔ `public.users`), autorización granular mediante **Row Level Security (RLS)**, búsqueda vectorial **`pgvector`** y eventos en tiempo real (**Supabase Realtime**).
-   - **Neon PostgreSQL Serverless (Aislado vía Supabase Edge Functions):**
-     - `siga-vault-analytics`: Respaldo incremental activo, *snapshots* inmutables por Momento Pedagógico y analítica pesada BI (deserción, "materias filtro", SLA).
-     - `siga-telematica-labs`: Base de datos aislada con **datos 100 % sintéticos** y rol restringido para prácticas SQL de Telemática.
+1. **Motor PostgreSQL 17 Portable (Neon como BD Recomendada y en Transición a Principal):**
+   - **Neon Serverless Postgres ([neon.com](https://neon.com)):** Base de datos PostgreSQL 17 **recomendada para producción y *self-hosting*** (ver [`docs/SELF_HOSTING.md`](../SELF_HOSTING.md)) y motor objetivo de la transición OLTP principal. Aprovecha autoescalado, *Scale-to-Zero*, *Longer PITR*, `pgvector`, **Row Level Security (RLS)** y *Protected Branches* para cierres inmutables de Momento Pedagógico, además de:
+     - `siga-vault-analytics`: Instantáneas inmutables por Momento Pedagógico y analítica pesada BI (deserción, "materias filtro", SLA).
+     - `siga-telematica-labs`: Proyecto aislado con **datos 100 % sintéticos** y *branches* efímeros para prácticas SQL de Telemática.
+   - **Supabase (Base Inicial / Auth & Storage):** Provee autenticación (`auth.users` ↔ `public.users`, Google OAuth, Magic Links y Passkeys), almacenamiento de avatares y entorno BaaS inicial durante la migración progresiva del esquema hacia Neon. Todo el DDL y RLS en `supabase/migrations/` está diseñado en PostgreSQL estándar para ejecutarse en Neon sin dependencia de extensiones propietarias.
 2. **Estándar de Identificadores y Campos en Venezuela:**
    - **Claves primarias:** `UUID` (`gen_random_uuid()`) en todas las entidades principales, evitando exponer conteos secuenciales en URLs o QR.
    - **Cédula canónica (`cedula`):** Almacenada en formato normalizado `^[VEJ][0-9]{6,9}$` (ej. `V12345678`, sin guiones ni espacios) con índice único parcial `WHERE deleted_at IS NULL`. En UI se formatea `V-12345678`.

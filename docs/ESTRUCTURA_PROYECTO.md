@@ -9,9 +9,10 @@ Este documento describe la estructura del repositorio para **S.I.G.A.** (Next.js
 ```text
 S.I.G.A/
 ├── docs/                                  # Documentación técnica y contexto institucional
+│   ├── SELF_HOSTING.md                    # Guía de autohospedaje (Self-Hosting) recomendando Neon Serverless Postgres
 │   ├── CONTEXTO_INSTITUCIONAL.md          # Información migrada del Landing E.T.C. Andrés Bello + Anteproyecto
 │   ├── ESTRUCTURA_PROYECTO.md             # Este mapa de arquitectura y directorios
-│   ├── ARQUITECTURA_SUPABASE_NEON.md      # Integración Supabase + Neon vía Edge Functions (Zero-Secrets en Next.js)
+│   ├── ARQUITECTURA_SUPABASE_NEON.md      # Integración PostgreSQL Neon + Supabase y transición a Neon principal
 │   └── modulos/                           # Diseño relacional de BD y especificación completa por rol (Alumnos, Docentes, Administración)
 ├── prisma/                                # Modelado relacional y migraciones (Prisma / Drizzle)
 │   └── migrations/

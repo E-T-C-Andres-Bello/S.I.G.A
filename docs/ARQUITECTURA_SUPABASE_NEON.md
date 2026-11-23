@@ -1,8 +1,11 @@
-# Arquitectura Híbrida Supabase + Neon mediante Edge Functions — S.I.G.A.
+# Arquitectura PostgreSQL (Neon + Supabase) — S.I.G.A.
 
 **Institución:** Escuela Técnica Comercial "Andrés Bello" (Puerto Ordaz, Estado Bolívar · Código DEA `OD01340701`)  
-**Alcance del documento:** Especificación arquitectónica, modelo de seguridad *Zero-Secrets* en Next.js, flujos de respaldo activo, descarga analítica (BI) y laboratorios SQL aislados para la mención **Telemática**.  
-**Estado:** Documento de diseño previo a la implementación de backend (*sin código productivo todavía*).
+**Alcance del documento:** Especificación arquitectónica de la integración PostgreSQL con **Neon** (base de datos recomendada para producción y *self-hosting*, respaldos inmutables por lapso, analítica BI y laboratorios SQL de **Telemática**) y su evolución desde el diseño híbrido inicial con Supabase Edge Functions.  
+**Estado:** En transición planificada hacia **[Neon Serverless Postgres](https://neon.com)** como motor PostgreSQL principal (OLTP). Para desplegar tu propia instancia de S.I.G.A. sobre Neon, consulta primero [`docs/SELF_HOSTING.md`](./SELF_HOSTING.md).
+
+> **Evolución hacia Neon como Base de Datos Principal:**  
+> Originalmente S.I.G.A. se diseñó con Supabase como motor OLTP y Neon como bóveda analítica/labs vía Edge Functions (documentado abajo como arquitectura fase 1). Gracias al soporte de **Neon Launch** (*Autoscaling*, *Protected Branches*, *Longer PITR* y PostgreSQL 17 con `pgvector` y RLS), el proyecto está migrando su base de datos relacional principal hacia **Neon**, convirtiendo a **[Neon](https://neon.com)** en la **base de datos recomendada oficial para desarrolladores e instituciones que autohospeden S.I.G.A.** (ver [`docs/SELF_HOSTING.md`](./SELF_HOSTING.md)), manteniendo las credenciales de conexión estrictamente en el servidor (`DATABASE_URL`, nunca `NEXT_PUBLIC_`).
 
 ---
 

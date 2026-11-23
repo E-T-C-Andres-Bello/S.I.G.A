@@ -21,14 +21,15 @@ Plataforma web y PWA *offline-first* de código abierto para la gestión integra
 ## Tabla de Contenidos
 
 1. [Arquitectura General y Stack Tecnológico](#arquitectura-general-y-stack-tecnológico)
-2. [Módulos del Sistema](#módulos-del-sistema)
-3. [Capa de Inteligencia Artificial y Automatizaciones](#capa-de-inteligencia-artificial-y-automatizaciones)
-4. [Estrategia Offline-First y Almacenamiento Híbrido](#estrategia-offline-first-y-almacenamiento-híbrido)
-5. [Seguridad, Auditoría e Integridad de Datos](#seguridad-auditoría-e-integridad-de-datos)
-6. [Parametrización e Ingesta Inicial (Data Seeding)](#parametrización-e-ingesta-inicial-data-seeding)
-7. [Despliegue, Observabilidad y Notificaciones](#despliegue-observabilidad-y-notificaciones)
-8. [Patrocinadores y Aliados Tecnológicos](#patrocinadores-y-aliados-tecnológicos)
-9. [Licencia y Código de Conducta](#licencia-y-código-de-conducta)
+2. [Despliegue Propio (Self-Hosting)](#despliegue-propio-self-hosting)
+3. [Módulos del Sistema](#módulos-del-sistema)
+4. [Capa de Inteligencia Artificial y Automatizaciones](#capa-de-inteligencia-artificial-y-automatizaciones)
+5. [Estrategia Offline-First y Almacenamiento Híbrido](#estrategia-offline-first-y-almacenamiento-híbrido)
+6. [Seguridad, Auditoría e Integridad de Datos](#seguridad-auditoría-e-integridad-de-datos)
+7. [Parametrización e Ingesta Inicial (Data Seeding)](#parametrización-e-ingesta-inicial-data-seeding)
+8. [Despliegue, Observabilidad y Notificaciones](#despliegue-observabilidad-y-notificaciones)
+9. [Patrocinadores y Aliados Tecnológicos](#patrocinadores-y-aliados-tecnológicos)
+10. [Licencia y Código de Conducta](#licencia-y-código-de-conducta)
 
 ---
 
@@ -52,15 +53,14 @@ SIGA adopta una arquitectura **monolítica *serverless* full-stack** sobre Next.
 | **Acceso a Datos / ORM** | **Prisma ORM o Drizzle ORM + `@supabase/supabase-js`** | Modelado relacional tipado, migraciones limpias y consultas nativas bajo RLS. |
 | **Tareas Programadas (Cron)** | **`pg_cron` + `pg_net` / Edge Functions** | Ejecución asíncrona segura de respaldos hacia Neon, resúmenes semanales y limpieza de *branches*. |
 
-### 3. Base de Datos, Respaldo Activo, Analítica y Tiempo Real (BaaS)
+### 3. Base de Datos, Analítica y Tiempo Real
 | Componente | Tecnología | Propósito Técnico |
 | :--- | :--- | :--- |
-| **Motor Relacional Principal** | **PostgreSQL (Supabase)** | Esquema académico, administrativo y multi-sede (*Multi-Tenant*) en producción. |
-| **Respaldo Activo, Analítica y Labs** | **Neon (vía Supabase Edge Functions)** | Sistema de respaldo activo de Supabase, descarga de consultas pesadas de analítica/BI y *branching* instantáneo para prácticas SQL de **Telemática**, operado exclusivamente mediante **Supabase Edge Functions** sin exponer llaves de Neon en Next.js. |
+| **Motor Relacional Recomendado (Producción & Self-Hosting)** | **[Neon Serverless Postgres](https://neon.com) (PostgreSQL 17)** | Base de datos PostgreSQL recomendada para autohospedaje y en **transición activa como motor OLTP principal** de S.I.G.A. Aporta autoescalado, *Scale-to-Zero*, *Protected Branches* para cierres inmutables de lapso, analítica/BI y *branching* instantáneo para los laboratorios SQL de **Telemática**. |
+| **Plataforma BaaS Base (Auth / Storage / Baseline)** | **Supabase** | Autenticación institucional (Google OAuth `@etcandresbello.org`, Magic Links y Passkeys WebAuthn), almacenamiento de avatares y capa BaaS inicial durante la transición hacia Neon como base de datos principal. |
 | **Seguridad a Nivel de Fila** | **PostgreSQL Row Level Security (RLS)** | Aislamiento estricto por rol: estudiantes solo leen sus notas; docentes solo editan sus secciones asignadas. |
-| **Autenticación** | **Supabase Auth / OAuth** | Cédula/Correo + contraseña, Google OAuth (`@etcandresbello.org`) y *Magic Links* sin registro para tutores externos. |
 | **Base Vectorial (RAG)** | **Extensión `pgvector`** | Almacenamiento de *embeddings* de guías docentes y libros dentro del mismo PostgreSQL para el Tutor IA. |
-| **Eventos en Tiempo Real** | **Supabase Realtime** | Actualización instantánea de notificaciones académicas, trámites y alertas escolares sin recargar. |
+| **Eventos en Tiempo Real** | **Supabase Realtime / SSE** | Actualización instantánea de notificaciones académicas, trámites y alertas escolares sin recargar. |
 
 ### 4. Almacenamiento Híbrido y Generación de Documentos
 | Componente | Tecnología | Propósito Técnico |
@@ -76,6 +76,22 @@ SIGA adopta una arquitectura **monolítica *serverless* full-stack** sobre Next.
 | :--- | :--- | :--- |
 | **Orquestación LLM** | **Vercel AI SDK (`ai`)** | Respuestas en *streaming* para chats y salidas estructuradas en JSON. |
 | **Modelo Multimodal** | **Google Gemini API (`@google/genai` — Gemini 2.5 Flash)** | OCR de documentos, generación de evaluaciones, revisión normativa, análisis predictivo y Tutor Socrático. |
+
+---
+
+## Despliegue Propio (Self-Hosting)
+
+Si deseas desplegar **S.I.G.A.** para desarrollo, pruebas o para otra institución educativa, **recomendamos [Neon Serverless Postgres](https://neon.com)** como base de datos PostgreSQL principal por su soporte nativo de PostgreSQL 17 (`pgvector` + RLS), autoescalado en picos de cierre de lapso, *Scale-to-Zero* para optimizar costos en vacaciones/noches y *Database Branching* para pruebas seguras y laboratorios escolares.
+
+```bash
+git clone https://github.com/E-T-C-Andres-Bello/S.I.G.A.git
+cd S.I.G.A
+npm install
+# Configura .env.local con tu cadena de conexión de Neon (DATABASE_URL) y Auth
+npm run dev
+```
+
+Consulta la guía completa paso a paso (aprovisionamiento en Neon, *connection pooling*, ramas protegidas, variables de entorno y despliegue en producción) en **[`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md)**.
 
 ---
 
@@ -216,10 +232,11 @@ Para inicializar el entorno productivo y alimentar los motores de reglas, genera
 
 SIGA cuenta con un **Landing Page propio** (`src/app/(landing)/`) diseñado específicamente para presentar la plataforma ante la comunidad educativa de la **E.T.C. "Andrés Bello"**, integrando identidad institucional, acceso por roles, verificador público QR, módulos por mención y patrocinadores tecnológicos.
 
+- **Guía de autohospedaje (Self-Hosting con Neon):** [`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md)
 - **Contexto institucional migrado:** [`docs/CONTEXTO_INSTITUCIONAL.md`](docs/CONTEXTO_INSTITUCIONAL.md)
 - **Estructura de carpetas y rutas del stack:** [`docs/ESTRUCTURA_PROYECTO.md`](docs/ESTRUCTURA_PROYECTO.md)
 - **Especificación del Aula Virtual Unificada:** [`docs/modulos/04-AULA-VIRTUAL.md`](docs/modulos/04-AULA-VIRTUAL.md)
-- **Arquitectura híbrida Supabase + Neon (Edge Functions):** [`docs/ARQUITECTURA_SUPABASE_NEON.md`](docs/ARQUITECTURA_SUPABASE_NEON.md)
+- **Arquitectura PostgreSQL (Neon + Supabase y transición a Neon principal):** [`docs/ARQUITECTURA_SUPABASE_NEON.md`](docs/ARQUITECTURA_SUPABASE_NEON.md)
 
 ---
 
@@ -227,10 +244,10 @@ SIGA cuenta con un **Landing Page propio** (`src/app/(landing)/`) diseñado espe
 
 Este proyecto educativo sin fines de lucro es posible gracias al apoyo de iniciativas de código abierto y programas educativos verificados en el portal institucional:
 
+- **[Neon](https://neon.com):** Base de datos **PostgreSQL Serverless recomendada** para producción y *self-hosting* (en transición como motor OLTP principal), *Protected Branches* por cierre de lapso, analítica académica/BI y laboratorios SQL aislados de **Telemática**.
 - **GitHub:** Control de versiones, repositorio *open source* y automatización CI/CD.
 - **Cloudflare:** Aceleración global, protección WAF, DNS e infraestructura Edge para `etcandresbello.org`.
-- **Supabase:** Base de datos PostgreSQL principal en tiempo real, autenticación estudiantil, RLS y `pgvector`.
-- **Neon:** Respaldo activo de Supabase, consultas de analítica académica/BI sin sobrecargar producción y bases de datos *serverless* para los laboratorios de **Telemática**.
+- **Supabase:** Autenticación estudiantil/institucional (OAuth, Magic Links y Passkeys), almacenamiento de avatares y base BaaS inicial.
 - **Google Workspace:** Identidad institucional (`@etcandresbello.org`), colaboración académica y almacenamiento documental.
 - **Mailtrap:** Pruebas seguras y entrega confiable de correos transaccionales escolares.
 - **PostHog:** Analítica de producto, métricas de rendimiento y telemetría académica de SIGA.
