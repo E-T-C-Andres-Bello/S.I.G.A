@@ -10,7 +10,9 @@ import {
   Bell,
   BookOpenCheck,
   CalendarCheck2,
+  ClipboardCheck,
   ClipboardList,
+  FileSpreadsheet,
   FileText,
   Home,
   Layers,
@@ -247,6 +249,33 @@ export function DashboardSidebar({
           label: "Trámites",
           href: "/estudiante/tramites",
           icon: FileText,
+        }
+      );
+    }
+
+    if (
+      (profile.primaryRole === "docente" ||
+        profile.primaryRole === "coordinador_mencion") &&
+      isVerifiedWorkspace
+    ) {
+      items.push(
+        {
+          id: "planificacion",
+          label: "Planificación",
+          href: "/docente/planificacion",
+          icon: ClipboardCheck,
+        },
+        {
+          id: "asistencia",
+          label: "Asistencia y Diario",
+          href: "/docente/asistencia",
+          icon: CalendarCheck2,
+        },
+        {
+          id: "notas",
+          label: "Calificaciones",
+          href: "/docente/notas",
+          icon: FileSpreadsheet,
         }
       );
     }
