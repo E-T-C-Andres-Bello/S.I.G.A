@@ -11,18 +11,6 @@ import {
   markAllNotificationsReadAction,
   markNotificationReadAction,
 } from "@/features/notificaciones/notifications-actions";
-import { getBrowserSupabaseClient } from "@/lib/supabase/client";
-
-interface RawNotificationRow {
-  id: string;
-  category: string;
-  title: string;
-  body: string;
-  action_url: string | null;
-  is_read: boolean;
-  read_at: string | null;
-  created_at: string;
-}
 
 export interface NotificationsContextValue {
   notifications: NotificationItem[];
@@ -39,21 +27,7 @@ export interface NotificationsContextValue {
 const NotificationsContext =
   React.createContext<NotificationsContextValue | null>(null);
 
-// Contador monotónico para tópicos Realtime (evita colisiones en React StrictMode)
-let notificationTopicCounter = 0;
-
-function mapRow(row: RawNotificationRow): NotificationItem {
-  return {
-    id: row.id,
-    category: normalizeNotificationCategory(row.category),
-    title: row.title,
-    body: row.body,
-    actionUrl: sanitizeNotificationActionUrl(row.action_url),
-    isRead: Boolean(row.is_read),
-    readAt: row.read_at,
-    createdAt: row.created_at,
-  };
-}
+const POLL_INTERVAL_MS = 30_000;
 
 export function NotificationsProvider({
   internalUserId,
@@ -74,29 +48,66 @@ export function NotificationsProvider({
 
   const markAllLockRef = React.useRef(false);
   const pendingIdsRef = React.useRef<Set<string>>(new Set());
+  const seenIdsRef = React.useRef<Set<string>>(new Set());
+  const initializedRef = React.useRef(false);
 
   const fetchNotifications = React.useCallback(async () => {
-    const supabase = getBrowserSupabaseClient();
-    if (!supabase || !internalUserId) {
+    if (!internalUserId) {
       setLoading(false);
       return;
     }
 
     try {
-      const { data, error } = await supabase
-        .from("notifications")
-        .select(
-          "id, category, title, body, action_url, is_read, read_at, created_at"
-        )
-        .eq("recipient_user_id", internalUserId)
-        .order("created_at", { ascending: false })
-        .limit(60)
-        .returns<RawNotificationRow[]>();
-
-      if (!error && Array.isArray(data)) {
-        setNotifications(data.map(mapRow));
-        setLoadedOnce(true);
+      const res = await fetch("/api/notificaciones/feed", {
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        setRealtimeConnected(false);
+        return;
       }
+
+      const payload = (await res.json()) as {
+        ok?: boolean;
+        items?: Array<{
+          id: string;
+          category: string;
+          title: string;
+          body: string;
+          actionUrl: string | null;
+          isRead: boolean;
+          readAt: string | null;
+          createdAt: string;
+        }>;
+      };
+
+      if (payload.ok && Array.isArray(payload.items)) {
+        const mapped: NotificationItem[] = payload.items.map((row) => ({
+          id: row.id,
+          category: normalizeNotificationCategory(row.category),
+          title: row.title,
+          body: row.body,
+          actionUrl: sanitizeNotificationActionUrl(row.actionUrl),
+          isRead: Boolean(row.isRead),
+          readAt: row.readAt,
+          createdAt: row.createdAt,
+        }));
+
+        if (initializedRef.current) {
+          for (const item of mapped) {
+            if (!seenIdsRef.current.has(item.id) && !item.isRead) {
+              toast.info(item.title, { description: item.body });
+            }
+          }
+        }
+        seenIdsRef.current = new Set(mapped.map((m) => m.id));
+        initializedRef.current = true;
+
+        setNotifications(mapped);
+        setLoadedOnce(true);
+        setRealtimeConnected(true);
+      }
+    } catch {
+      setRealtimeConnected(false);
     } finally {
       setLoading(false);
     }
@@ -106,65 +117,33 @@ export function NotificationsProvider({
     void fetchNotifications();
   }, [fetchNotifications]);
 
-  // Suscripción en tiempo real a `public.notifications` filtrada por destinatario
+  // Actualización periódica ligera cuando la pestaña está visible y al recuperar foco
   React.useEffect(() => {
-    const supabase = getBrowserSupabaseClient();
-    if (!supabase || !internalUserId) return;
+    if (!internalUserId) return;
 
-    const topic = `siga-notifications-${internalUserId}-${++notificationTopicCounter}`;
-    const channel = supabase.channel(topic);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void fetchNotifications();
+      }
+    }, POLL_INTERVAL_MS);
 
-    channel
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-          filter: `recipient_user_id=eq.${internalUserId}`,
-        },
-        (payload) => {
-          const raw = payload.new as RawNotificationRow | undefined;
-          if (!raw?.id) return;
-          const item = mapRow(raw);
-          setNotifications((prev) => {
-            if (prev.some((n) => n.id === item.id)) return prev;
-            return [item, ...prev].slice(0, 80);
-          });
-          setLoadedOnce(true);
-          toast.info(item.title, {
-            description: item.body,
-          });
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "notifications",
-          filter: `recipient_user_id=eq.${internalUserId}`,
-        },
-        (payload) => {
-          const raw = payload.new as RawNotificationRow | undefined;
-          if (!raw?.id) return;
-          const updated = mapRow(raw);
-          setNotifications((prev) =>
-            prev.map((n) => (n.id === updated.id ? updated : n))
-          );
-        }
-      )
-      .subscribe((status) => {
-        setRealtimeConnected(status === "SUBSCRIBED");
-      });
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void fetchNotifications();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
-      setRealtimeConnected(false);
-      void supabase.removeChannel(channel);
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [internalUserId]);
+  }, [internalUserId, fetchNotifications]);
 
   const hydrateFromServer = React.useCallback((items: NotificationItem[]) => {
+    for (const it of items) seenIdsRef.current.add(it.id);
+    initializedRef.current = true;
+
     setNotifications((prev) => {
       if (prev.length === 0) return items;
       const byId = new Map<string, NotificationItem>();

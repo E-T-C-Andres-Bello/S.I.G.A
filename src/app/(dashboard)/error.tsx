@@ -12,6 +12,13 @@ export default function DashboardError({
   reset: () => void;
 }) {
   useEffect(() => {
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[SIGA:DEV][dashboard:error]", {
+        name: error.name,
+        message: error.message,
+        digest: error.digest ?? null,
+      });
+    }
     Sentry.captureException(error);
   }, [error]);
 

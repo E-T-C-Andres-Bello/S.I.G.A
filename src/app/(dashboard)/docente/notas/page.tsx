@@ -12,7 +12,7 @@ import {
   ShieldCheck,
   Users,
 } from "lucide-react";
-import { getAuthenticatedDashboardContext } from "@/lib/supabase/dashboard-session";
+import { getAuthenticatedDashboardContext } from "@/lib/auth/dashboard-session";
 import {
   getActiveMomentos,
   getSectionStudents,

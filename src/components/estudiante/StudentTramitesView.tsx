@@ -65,8 +65,7 @@ import type {
   StudentRequestItem,
   StudentTramitesData,
 } from "@/features/estudiante/tramites-data";
-import { getBrowserSupabaseClient } from "@/lib/supabase/client";
-import type { DashboardUserProfile } from "@/lib/supabase/dashboard-session";
+import type { DashboardUserProfile } from "@/lib/auth/dashboard-session";
 import { formatVenezuelanCedulaDisplay } from "@/lib/validators/auth";
 import {
   OFFICIAL_DOCUMENT_TYPE_LABELS,
@@ -90,8 +89,6 @@ export interface StudentTramitesViewProps {
   /** Detalle prellenado opcional cuando proviene de una revisión de asignatura. */
   initialRequestReason?: string;
 }
-
-let tramitesRealtimeSeq = 0;
 
 function formatCaracasDate(iso: string): string {
   const dt = new Date(iso);
@@ -162,80 +159,15 @@ export function StudentTramitesView({
   const downloadLockRef = React.useRef(false);
   const pendingClientRequestIdRef = React.useRef<string | null>(null);
 
-  // Suscripción en tiempo real a `student_requests` del estudiante autenticado
+  // Refresco periódico discreto cuando la pestaña está activa para reflejar aprobaciones de secretaría
   React.useEffect(() => {
-    const supabase = getBrowserSupabaseClient();
-    if (!supabase) return;
-
-    const topic = `siga-student-requests-${++tramitesRealtimeSeq}`;
-    const channel = supabase
-      .channel(topic)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "student_requests",
-          filter: `student_user_id=eq.${profile.internalUserId}`,
-        },
-        (payload) => {
-          if (payload.eventType === "DELETE") {
-            const deletedId = (payload.old as { id?: string } | null)?.id;
-            if (deletedId) {
-              setRequests((prev) => prev.filter((item) => item.id !== deletedId));
-            }
-            return;
-          }
-
-          const row = payload.new as {
-            id?: string;
-            request_type?: StudentRequestType;
-            reason?: string | null;
-            status?: StudentRequestStatus;
-            sla_entered_at?: string;
-            resolved_at?: string | null;
-            official_document_id?: string | null;
-            created_at?: string;
-            updated_at?: string;
-          } | null;
-
-          if (!row?.id || !row.request_type || !row.status) return;
-
-          const mapped: StudentRequestItem = {
-            id: row.id,
-            requestType: row.request_type,
-            reason: row.reason ?? null,
-            status: row.status,
-            slaEnteredAt: row.sla_entered_at ?? new Date().toISOString(),
-            resolvedAt: row.resolved_at ?? null,
-            officialDocumentId: row.official_document_id ?? null,
-            createdAt: row.created_at ?? new Date().toISOString(),
-            updatedAt: row.updated_at ?? new Date().toISOString(),
-          };
-
-          setRequests((prev) => {
-            const idx = prev.findIndex((item) => item.id === mapped.id);
-            if (idx === -1) return [mapped, ...prev];
-            const copy = [...prev];
-            copy[idx] = mapped;
-            return copy;
-          });
-
-          if (
-            mapped.officialDocumentId ||
-            mapped.status === "approved" ||
-            mapped.status === "delivered"
-          ) {
-            router.refresh();
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [profile.internalUserId, router]);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        router.refresh();
+      }
+    }, 45_000);
+    return () => window.clearInterval(timer);
+  }, [router]);
 
   const handleCreateRequest = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

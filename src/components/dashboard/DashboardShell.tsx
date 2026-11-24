@@ -20,8 +20,8 @@ import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { SigaGlobalLoader } from "@/components/ui/ai-loader";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { getBrowserSupabaseClient } from "@/lib/supabase/client";
-import type { DashboardUserProfile } from "@/lib/supabase/dashboard-session";
+import { signOutClientSession } from "@/lib/auth/client";
+import type { DashboardUserProfile } from "@/lib/auth/dashboard-session";
 import { formatVenezuelanCedulaDisplay } from "@/lib/validators/auth";
 import { DashboardSidebar, ROLE_LABELS } from "./DashboardSidebar";
 import { GlassThemeProvider } from "./GlassThemeContext";
@@ -110,8 +110,7 @@ export function DashboardShell({
     if (signingOut) return;
     setSigningOut(true);
     try {
-      const supabase = getBrowserSupabaseClient();
-      await supabase?.auth.signOut();
+      await signOutClientSession();
     } finally {
       router.push("/");
       router.refresh();

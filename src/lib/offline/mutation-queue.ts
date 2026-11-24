@@ -1,7 +1,5 @@
 "use client";
 
-import { getBrowserSupabaseClient } from "@/lib/supabase/client";
-
 export type OfflineMutationKind = "attendance_batch" | "grade_entry";
 
 export interface OfflineAttendanceBatchPayload {
@@ -9,7 +7,7 @@ export interface OfflineAttendanceBatchPayload {
   momentoId: string;
   sessionDate: string;
   blockLabel: string;
-  recordedMode: "manual" | "qr_scan" | "offline_sync";
+  recordedMode: "online" | "offline_pwa" | "qr_scan";
   records: Array<{
     enrollment_id: string;
     status: "present" | "absent" | "late" | "justified";
@@ -65,10 +63,6 @@ function openOfflineQueueDb(): Promise<IDBDatabase> {
   });
 }
 
-/**
- * Encola de forma idempotente (sin duplicados por `dedupKey`) una mutación de asistencia
- * o calificación cuando el salón no cuenta con internet o electricidad.
- */
 export async function enqueueOfflineMutation(params: {
   dedupKey: string;
   kind: OfflineMutationKind;
@@ -138,7 +132,7 @@ async function removeQueuedMutation(dedupKey: string): Promise<void> {
 
 /**
  * Sincroniza en orden cronológico y con bloqueo anti-doble envío todas las mutaciones
- * pendientes en IndexedDB apenas se restablece la conexión a internet.
+ * pendientes en IndexedDB contra `/api/offline/sync` (Neon PostgreSQL + RLS).
  */
 export async function flushPendingOfflineMutations(): Promise<{
   syncedCount: number;
@@ -152,11 +146,6 @@ export async function flushPendingOfflineMutations(): Promise<{
     return { syncedCount: 0, failedCount: 0 };
   }
 
-  const supabase = getBrowserSupabaseClient();
-  if (!supabase) {
-    return { syncedCount: 0, failedCount: 0 };
-  }
-
   isFlushingQueue = true;
   let syncedCount = 0;
   let failedCount = 0;
@@ -164,38 +153,24 @@ export async function flushPendingOfflineMutations(): Promise<{
   try {
     const pending = await listQueuedOfflineMutations();
     for (const item of pending) {
-      if (item.kind === "attendance_batch") {
-        const p = item.payload as OfflineAttendanceBatchPayload;
-        const { error } = await supabase.rpc("siga_sync_attendance_batch", {
-          p_teacher_assignment_id: p.teacherAssignmentId,
-          p_momento_id: p.momentoId,
-          p_session_date: p.sessionDate,
-          p_block_label: p.blockLabel,
-          p_recorded_mode: p.recordedMode,
-          p_records: p.records,
+      try {
+        const res = await fetch("/api/offline/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kind: item.kind,
+            payload: item.payload,
+          }),
         });
-        if (!error) {
+
+        if (res.ok) {
           await removeQueuedMutation(item.dedupKey);
           syncedCount += 1;
         } else {
           failedCount += 1;
         }
-      } else if (item.kind === "grade_entry") {
-        const g = item.payload as OfflineGradeEntryPayload;
-        const { error } = await supabase.rpc("siga_registrar_nota", {
-          p_evaluation_item_id: g.evaluationItemId,
-          p_enrollment_id: g.enrollmentId,
-          p_numeric_score: g.numericScore ?? undefined,
-          p_literal_grade: g.literalGrade ?? undefined,
-          p_source: "offline_sync",
-          p_reason: g.reason,
-        });
-        if (!error) {
-          await removeQueuedMutation(item.dedupKey);
-          syncedCount += 1;
-        } else {
-          failedCount += 1;
-        }
+      } catch {
+        failedCount += 1;
       }
     }
   } finally {

@@ -55,7 +55,7 @@ Sustituye cada uno por tu nodo nativo **`Mailtrap → Send an email`** (puede te
 
 > Si usas Sandbox o un campo distinto de destinatarios múltiples en el nodo Mailtrap, puedes usar `staff_to_first_email` o iterar `staff_alert.to`.
 
-### 3. Activar y conectar con Supabase Edge Functions
-1. En modo desarrollo el nodo **`Webhook (Trámite S.I.G.A.)`** viene con `Authentication: None` listo para probar sin fricción (cuando pases a producción, cámbialo a `Header Auth` con `x-siga-n8n-secret` y configura `N8N_WEBHOOK_SECRET` en Supabase).
+### 3. Activar y conectar con Neon Functions
+1. En modo desarrollo el nodo **`Webhook (Trámite S.I.G.A.)`** viene con `Authentication: None` listo para probar sin fricción (cuando pases a producción, cámbialo a `Header Auth` con `x-siga-n8n-secret` y configura `N8N_WEBHOOK_SECRET` en `.env.local` antes de ejecutar `neon deploy --env .env.local`).
 2. Activa el toggle **Active** del workflow y copia la **Production Webhook URL** del Webhook.
-3. Configura únicamente `N8N_WEBHOOK_URL_STUDENT_REQUEST` en Supabase Secrets tal como se indica en [`supabase/functions/workflows/README.md`](../../supabase/functions/workflows/README.md).
+3. Configura `N8N_WEBHOOK_URL_STUDENT_REQUEST` en tus variables de entorno y redespliega con `neon deploy --env .env.local` tal como se indica en [`neon/functions/README.md`](../../neon/functions/README.md).

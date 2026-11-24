@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { createScenarioSchema } from "@/features/menciones/coordinacion-schemas";
 import { resolveAuthorizedMencionScope } from "@/features/menciones/coordinacion-server";
-import { getAuthenticatedDashboardContext } from "@/lib/supabase/dashboard-session";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getAuthenticatedDashboardContext } from "@/lib/auth/dashboard-session";
+import {
+  isNeonDatabaseConfigured,
+  querySingleRow,
+  withUserDb,
+} from "@/lib/db/neon";
 
 export async function POST(request: Request) {
   const profile = await getAuthenticatedDashboardContext();
@@ -35,56 +39,74 @@ export async function POST(request: Request) {
     );
   }
 
-  // Si es coordinador de mención, forzar estrictamente su mención asignada
   const targetMencionId = scope.isScopedToSingleMencion
     ? scope.selectedMencion.id
     : parsed.data.mencionId;
 
-  const supabase = await createServerSupabaseClient();
-  if (!supabase) {
+  if (!isNeonDatabaseConfigured()) {
     return NextResponse.json(
       { error: "Servicio de datos no disponible." },
       { status: 503 }
     );
   }
 
-  const { data, error } = await supabase
-    .from("mention_lab_scenarios")
-    .insert({
-      mencion_id: targetMencionId,
-      grade_year: parsed.data.gradeYear,
-      tool_type: parsed.data.toolType,
-      title: parsed.data.title,
-      instructions: parsed.data.instructions,
-      is_base_catalog: parsed.data.isBaseCatalog,
-      created_by: profile.internalUserId,
-    })
-    .select(
-      "id, mencion_id, grade_year, tool_type, title, instructions, is_base_catalog, created_at"
-    )
-    .single();
+  try {
+    const data = await withUserDb(
+      { authUserId: profile.authUserId, email: profile.authEmail },
+      (client) =>
+        querySingleRow<{
+          id: string;
+          mencion_id: string;
+          grade_year: number;
+          tool_type: string;
+          title: string;
+          instructions: string;
+          is_base_catalog: boolean;
+          created_at: string;
+        }>(
+          client,
+          `INSERT INTO public.mention_lab_scenarios
+             (mencion_id, grade_year, tool_type, title, instructions, is_base_catalog, created_by)
+           VALUES ($1::uuid, $2, $3, $4, $5, $6, $7::uuid)
+           RETURNING id, mencion_id, grade_year, tool_type, title, instructions, is_base_catalog, created_at`,
+          [
+            targetMencionId,
+            parsed.data.gradeYear,
+            parsed.data.toolType,
+            parsed.data.title,
+            parsed.data.instructions,
+            parsed.data.isBaseCatalog,
+            profile.internalUserId,
+          ]
+        )
+    );
 
-  if (error || !data) {
+    if (!data) {
+      return NextResponse.json(
+        { error: "No fue posible registrar el escenario práctico." },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        scenario: {
+          id: data.id,
+          mencionId: data.mencion_id,
+          gradeYear: data.grade_year,
+          toolType: data.tool_type,
+          title: data.title,
+          instructions: data.instructions,
+          isBaseCatalog: data.is_base_catalog,
+          createdAt: data.created_at,
+        },
+      },
+      { status: 201 }
+    );
+  } catch {
     return NextResponse.json(
       { error: "No fue posible registrar el escenario práctico." },
       { status: 500 }
     );
   }
-
-  return NextResponse.json(
-    {
-      scenario: {
-        id: data.id,
-        mencionId: data.mencion_id,
-        gradeYear: data.grade_year,
-        toolType: data.tool_type,
-        title: data.title,
-        instructions: data.instructions,
-        isBaseCatalog: data.is_base_catalog,
-        createdAt: data.created_at,
-      },
-    },
-    { status: 201 }
-  );
 }
-

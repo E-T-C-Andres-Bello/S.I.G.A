@@ -161,7 +161,7 @@ sequenceDiagram
 
 ## 5. Catálogo Conceptual de Supabase Edge Functions
 
-Todas las funciones se alojarán en `supabase/functions/` y seguirán estas responsabilidades mínimas:
+Todas las funciones serverless activas se alojan en `neon/functions/` (declaradas en `neon.ts` y desplegadas con `neon deploy`) y siguen estas responsabilidades mínimas:
 
 | Edge Function | Quién la invoca | Validación de seguridad | Secretos que consume | Salida hacia cliente |
 | :--- | :--- | :--- | :--- | :--- |

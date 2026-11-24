@@ -29,7 +29,7 @@ import {
   type MencionLabScenarioItem,
   type MencionTeacherAbsenceItem,
 } from "@/features/menciones/coordinacion-schemas";
-import type { DashboardUserProfile } from "@/lib/supabase/dashboard-session";
+import type { DashboardUserProfile } from "@/lib/auth/dashboard-session";
 import { formatVenezuelanCedulaDisplay } from "@/lib/validators/auth";
 
 type MencionTabKey = "supervision" | "escenarios" | "incidencias";

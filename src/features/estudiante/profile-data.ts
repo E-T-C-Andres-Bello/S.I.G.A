@@ -1,5 +1,10 @@
-import type { DashboardUserProfile } from "@/lib/supabase/dashboard-session";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import type { DashboardUserProfile } from "@/lib/auth/dashboard-session";
+import {
+  isNeonDatabaseConfigured,
+  querySingleRow,
+  withServiceDb,
+  withUserDb,
+} from "@/lib/db/neon";
 
 export interface StudentProfileAuditEntry {
   id: string;
@@ -55,15 +60,13 @@ interface EnrollmentProfileRow {
   emergency_contact_cedula: string | null;
   emergency_contact_phone: string | null;
   emergency_contact_relationship: string | null;
-  sections: { section_letter: string } | Array<{ section_letter: string }> | null;
-  menciones:
-    | { code: string; name: string; specialty: string | null }
-    | Array<{ code: string; name: string; specialty: string | null }>
-    | null;
-  school_years:
-    | { code: string; name: string; is_current: boolean }
-    | Array<{ code: string; name: string; is_current: boolean }>
-    | null;
+  section_letter: string | null;
+  mencion_code: string | null;
+  mencion_name: string | null;
+  mencion_specialty: string | null;
+  school_year_code: string | null;
+  school_year_name: string | null;
+  school_year_is_current: boolean;
 }
 
 interface AuditLogRow {
@@ -73,21 +76,15 @@ interface AuditLogRow {
   created_at: string;
 }
 
-function unwrapSingle<T>(value: T | T[] | null | undefined): T | null {
-  if (!value) return null;
-  return Array.isArray(value) ? (value[0] ?? null) : value;
-}
-
 /**
- * Carga en una sola tanda paralela los datos oficiales del perfil del estudiante,
- * su matrícula vigente con contacto de emergencia, proveedores de acceso y últimos
- * registros de auditoría de su propia cuenta (bajo RLS).
+ * Carga en Neon (bajo RLS) los datos oficiales del perfil del estudiante,
+ * matrícula vigente, proveedores vinculados y auditoría reciente.
  */
 export async function getStudentProfilePageData(
   profile: DashboardUserProfile
 ): Promise<StudentProfilePageData> {
   const fallback: StudentProfilePageData = {
-    authUserId: "",
+    authUserId: profile.authUserId,
     internalUserId: profile.internalUserId,
     firstName: profile.firstName,
     lastName: profile.lastName,
@@ -104,101 +101,116 @@ export async function getStudentProfilePageData(
     recentAuditEntries: [],
   };
 
-  const supabase = await createServerSupabaseClient();
-  if (!supabase) {
+  if (!isNeonDatabaseConfigured()) {
     return fallback;
   }
 
-  const [authUserRes, userMetaRes, enrollmentsRes, auditRes] = await Promise.all([
-    supabase.auth.getUser(),
-    supabase
-      .from("users")
-      .select("workspace_verified_at, phone, recovery_email, avatar_webp_url")
-      .eq("id", profile.internalUserId)
-      .maybeSingle<UserMetaRow>(),
-    supabase
-      .from("enrollments")
-      .select(
-        "id, grade_year, enrollment_status, emergency_contact_name, emergency_contact_cedula, emergency_contact_phone, emergency_contact_relationship, sections(section_letter), menciones(code, name, specialty), school_years!inner(code, name, is_current)"
-      )
-      .eq("student_user_id", profile.internalUserId)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false })
-      .returns<EnrollmentProfileRow[]>(),
-    supabase
-      .from("profile_audit_logs")
-      .select("id, action, changed_fields, created_at")
-      .eq("user_id", profile.internalUserId)
-      .order("created_at", { ascending: false })
-      .limit(5)
-      .returns<AuditLogRow[]>(),
+  const [providerRows, userData] = await Promise.all([
+    withServiceDb(async (client) => {
+      const res = await client.query<{ provider_id: string }>(
+        `SELECT "providerId" AS provider_id
+           FROM public.auth_account
+          WHERE "userId" = $1`,
+        [profile.authUserId]
+      );
+      return res.rows;
+    }),
+    withUserDb(
+      { authUserId: profile.authUserId, email: profile.authEmail },
+      async (client) => {
+        const userMeta = await querySingleRow<UserMetaRow>(
+          client,
+          `SELECT workspace_verified_at, phone, recovery_email, avatar_webp_url
+             FROM public.users
+            WHERE id = $1::uuid
+            LIMIT 1`,
+          [profile.internalUserId]
+        );
+        const enrollmentsRes = await client.query<EnrollmentProfileRow>(
+          `SELECT e.id,
+                  e.grade_year,
+                  e.enrollment_status,
+                  e.emergency_contact_name,
+                  e.emergency_contact_cedula,
+                  e.emergency_contact_phone,
+                  e.emergency_contact_relationship,
+                  s.section_letter,
+                  m.code AS mencion_code,
+                  m.name AS mencion_name,
+                  m.specialty AS mencion_specialty,
+                  sy.code AS school_year_code,
+                  sy.name AS school_year_name,
+                  sy.is_current AS school_year_is_current
+             FROM public.enrollments e
+             JOIN public.school_years sy ON sy.id = e.school_year_id
+             LEFT JOIN public.sections s ON s.id = e.section_id
+             LEFT JOIN public.menciones m ON m.id = e.mencion_id
+            WHERE e.student_user_id = $1::uuid
+              AND e.deleted_at IS NULL
+            ORDER BY sy.is_current DESC, e.created_at DESC`,
+          [profile.internalUserId]
+        );
+        const auditRes = await client.query<AuditLogRow>(
+          `SELECT id, action, changed_fields, created_at
+             FROM public.profile_audit_logs
+            WHERE user_id = $1::uuid
+            ORDER BY created_at DESC
+            LIMIT 5`,
+          [profile.internalUserId]
+        );
+
+        return {
+          userMeta,
+          enrollments: enrollmentsRes.rows,
+          audits: auditRes.rows,
+        };
+      }
+    ),
   ]);
 
-  const authUser = authUserRes.data.user;
-  const identities = authUser?.identities ?? [];
-  const providersFromMeta = Array.isArray(authUser?.app_metadata?.providers)
-    ? (authUser?.app_metadata?.providers as string[])
-    : [];
-  const providerSet = new Set<string>([
-    ...identities.map((id) => id.provider),
-    ...providersFromMeta,
-  ]);
-
-  const enrollments = enrollmentsRes.data ?? [];
+  const providerSet = new Set(providerRows.map((p) => p.provider_id));
   const currentEnrollment =
-    enrollments.find((e) => unwrapSingle(e.school_years)?.is_current) ??
-    enrollments[0] ??
+    userData.enrollments.find((e) => e.school_year_is_current) ??
+    userData.enrollments[0] ??
     null;
 
-  const section = currentEnrollment
-    ? unwrapSingle(currentEnrollment.sections)
-    : null;
-  const mencion = currentEnrollment
-    ? unwrapSingle(currentEnrollment.menciones)
-    : null;
-  const schoolYear = currentEnrollment
-    ? unwrapSingle(currentEnrollment.school_years)
-    : null;
-
-  const userMeta = userMetaRes.data;
-
-  const recentAuditEntries: StudentProfileAuditEntry[] = (
-    auditRes.data ?? []
-  ).map((row) => ({
-    id: row.id,
-    action:
-      row.action === "avatar_updated" || row.action === "avatar_removed"
-        ? row.action
-        : "profile_contact_updated",
-    changedFields: Array.isArray(row.changed_fields) ? row.changed_fields : [],
-    createdAt: row.created_at,
-  }));
+  const recentAuditEntries: StudentProfileAuditEntry[] = userData.audits.map(
+    (row) => ({
+      id: row.id,
+      action:
+        row.action === "avatar_updated" || row.action === "avatar_removed"
+          ? row.action
+          : "profile_contact_updated",
+      changedFields: Array.isArray(row.changed_fields) ? row.changed_fields : [],
+      createdAt: row.created_at,
+    })
+  );
 
   return {
-    authUserId: authUser?.id ?? "",
+    authUserId: profile.authUserId,
     internalUserId: profile.internalUserId,
     firstName: profile.firstName,
     lastName: profile.lastName,
     cedula: profile.cedula,
     institutionalEmail: profile.institutionalEmail,
-    recoveryEmail: userMeta?.recovery_email ?? profile.recoveryEmail,
-    phone: userMeta?.phone ?? profile.phone,
-    avatarWebpUrl: userMeta?.avatar_webp_url ?? profile.avatarWebpUrl,
+    recoveryEmail: userData.userMeta?.recovery_email ?? profile.recoveryEmail,
+    phone: userData.userMeta?.phone ?? profile.phone,
+    avatarWebpUrl: userData.userMeta?.avatar_webp_url ?? profile.avatarWebpUrl,
     accessTier: profile.accessTier,
-    workspaceVerifiedAt: userMeta?.workspace_verified_at ?? null,
+    workspaceVerifiedAt: userData.userMeta?.workspace_verified_at ?? null,
     hasGoogleProvider: providerSet.has("google"),
     hasEmailPasswordProvider:
-      providerSet.has("email") || providerSet.size === 0,
+      providerSet.has("credential") || providerSet.size === 0,
     enrollment: currentEnrollment
       ? {
           id: currentEnrollment.id,
-          schoolYearName: schoolYear?.name ?? null,
-          schoolYearCode: schoolYear?.code ?? null,
+          schoolYearName: currentEnrollment.school_year_name,
+          schoolYearCode: currentEnrollment.school_year_code,
           gradeYear: currentEnrollment.grade_year,
-          sectionLetter: section?.section_letter ?? null,
-          mencionCode: mencion?.code ?? null,
-          mencionName: mencion?.name ?? null,
-          mencionSpecialty: mencion?.specialty ?? null,
+          sectionLetter: currentEnrollment.section_letter,
+          mencionCode: currentEnrollment.mencion_code,
+          mencionName: currentEnrollment.mencion_name,
+          mencionSpecialty: currentEnrollment.mencion_specialty,
           enrollmentStatus: currentEnrollment.enrollment_status,
           emergencyContactName: currentEnrollment.emergency_contact_name,
           emergencyContactCedula: currentEnrollment.emergency_contact_cedula,

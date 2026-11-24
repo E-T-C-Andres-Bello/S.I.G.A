@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { RoleGenericDashboardView } from "@/components/dashboard/RoleGenericDashboardView";
-import { getAuthenticatedDashboardContext } from "@/lib/supabase/dashboard-session";
+import { getAuthenticatedDashboardContext } from "@/lib/auth/dashboard-session";
 
 export const metadata: Metadata = {
   title: 'Orientación y Bienestar · S.I.G.A. — E.T.C. "Andrés Bello"',

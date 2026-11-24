@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getAuthenticatedDashboardContext } from "@/lib/supabase/dashboard-session";
+import { getAuthenticatedDashboardContext } from "@/lib/auth/dashboard-session";
 
 export default async function EstudianteCarnetPage() {
   const profile = await getAuthenticatedDashboardContext();

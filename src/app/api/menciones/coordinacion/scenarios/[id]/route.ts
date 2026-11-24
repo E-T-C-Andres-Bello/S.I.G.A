@@ -2,8 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { toggleScenarioCatalogSchema } from "@/features/menciones/coordinacion-schemas";
 import { resolveAuthorizedMencionScope } from "@/features/menciones/coordinacion-server";
-import { getAuthenticatedDashboardContext } from "@/lib/supabase/dashboard-session";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getAuthenticatedDashboardContext } from "@/lib/auth/dashboard-session";
+import {
+  isNeonDatabaseConfigured,
+  querySingleRow,
+  withUserDb,
+} from "@/lib/db/neon";
 
 const idSchema = z.string().uuid();
 
@@ -34,50 +38,54 @@ export async function PATCH(
     return NextResponse.json({ error: "Datos inválidos." }, { status: 400 });
   }
 
-  const supabase = await createServerSupabaseClient();
-  if (!supabase) {
+  if (!isNeonDatabaseConfigured()) {
     return NextResponse.json(
       { error: "Servicio de datos no disponible." },
       { status: 503 }
     );
   }
 
-  const { data: existing } = await supabase
-    .from("mention_lab_scenarios")
-    .select("id, mencion_id")
-    .eq("id", id)
-    .maybeSingle<{ id: string; mencion_id: string }>();
-
-  if (!existing) {
-    return NextResponse.json(
-      { error: "Escenario no encontrado." },
-      { status: 404 }
+  try {
+    const result = await withUserDb(
+      { authUserId: profile.authUserId, email: profile.authEmail },
+      async (client) => {
+        const existing = await querySingleRow<{ id: string; mencion_id: string }>(
+          client,
+          `SELECT id, mencion_id FROM public.mention_lab_scenarios WHERE id = $1::uuid LIMIT 1`,
+          [id]
+        );
+        if (!existing) return "not_found" as const;
+        if (
+          scope.isScopedToSingleMencion &&
+          existing.mencion_id !== scope.selectedMencion?.id
+        ) {
+          return "forbidden" as const;
+        }
+        await client.query(
+          `UPDATE public.mention_lab_scenarios SET is_base_catalog = $1 WHERE id = $2::uuid`,
+          [parsed.data.isBaseCatalog, id]
+        );
+        return "ok" as const;
+      }
     );
-  }
 
-  if (
-    scope.isScopedToSingleMencion &&
-    existing.mencion_id !== scope.selectedMencion?.id
-  ) {
-    return NextResponse.json(
-      { error: "No autorizado para modificar escenarios de otra mención." },
-      { status: 403 }
-    );
-  }
+    if (result === "not_found") {
+      return NextResponse.json({ error: "Escenario no encontrado." }, { status: 404 });
+    }
+    if (result === "forbidden") {
+      return NextResponse.json(
+        { error: "No autorizado para modificar escenarios de otra mención." },
+        { status: 403 }
+      );
+    }
 
-  const { error } = await supabase
-    .from("mention_lab_scenarios")
-    .update({ is_base_catalog: parsed.data.isBaseCatalog })
-    .eq("id", id);
-
-  if (error) {
+    return NextResponse.json({ ok: true });
+  } catch {
     return NextResponse.json(
       { error: "No fue posible actualizar el escenario." },
       { status: 500 }
     );
   }
-
-  return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(
@@ -95,49 +103,52 @@ export async function DELETE(
     return NextResponse.json({ error: scope.message }, { status: 403 });
   }
 
-  const supabase = await createServerSupabaseClient();
-  if (!supabase) {
+  if (!isNeonDatabaseConfigured()) {
     return NextResponse.json(
       { error: "Servicio de datos no disponible." },
       { status: 503 }
     );
   }
 
-  const { data: existing } = await supabase
-    .from("mention_lab_scenarios")
-    .select("id, mencion_id")
-    .eq("id", id)
-    .maybeSingle<{ id: string; mencion_id: string }>();
-
-  if (!existing) {
-    return NextResponse.json(
-      { error: "Escenario no encontrado." },
-      { status: 404 }
+  try {
+    const result = await withUserDb(
+      { authUserId: profile.authUserId, email: profile.authEmail },
+      async (client) => {
+        const existing = await querySingleRow<{ id: string; mencion_id: string }>(
+          client,
+          `SELECT id, mencion_id FROM public.mention_lab_scenarios WHERE id = $1::uuid LIMIT 1`,
+          [id]
+        );
+        if (!existing) return "not_found" as const;
+        if (
+          scope.isScopedToSingleMencion &&
+          existing.mencion_id !== scope.selectedMencion?.id
+        ) {
+          return "forbidden" as const;
+        }
+        await client.query(
+          `DELETE FROM public.mention_lab_scenarios WHERE id = $1::uuid`,
+          [id]
+        );
+        return "ok" as const;
+      }
     );
-  }
 
-  if (
-    scope.isScopedToSingleMencion &&
-    existing.mencion_id !== scope.selectedMencion?.id
-  ) {
-    return NextResponse.json(
-      { error: "No autorizado para eliminar escenarios de otra mención." },
-      { status: 403 }
-    );
-  }
+    if (result === "not_found") {
+      return NextResponse.json({ error: "Escenario no encontrado." }, { status: 404 });
+    }
+    if (result === "forbidden") {
+      return NextResponse.json(
+        { error: "No autorizado para eliminar escenarios de otra mención." },
+        { status: 403 }
+      );
+    }
 
-  const { error } = await supabase
-    .from("mention_lab_scenarios")
-    .delete()
-    .eq("id", id);
-
-  if (error) {
+    return NextResponse.json({ ok: true });
+  } catch {
     return NextResponse.json(
       { error: "No fue posible eliminar el escenario porque tiene entregas asociadas." },
       { status: 409 }
     );
   }
-
-  return NextResponse.json({ ok: true });
 }
-

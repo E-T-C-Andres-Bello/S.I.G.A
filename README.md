@@ -49,27 +49,26 @@ SIGA adopta una arquitectura **monolítica *serverless* full-stack** sobre Next.
 ### 2. Backend & Lógica de Servidor
 | Componente | Tecnología | Propósito Técnico |
 | :--- | :--- | :--- |
-| **Runtime y Endpoints** | **Node.js (Next.js App Router) + Supabase Edge Functions (Deno)** | Next.js solo maneja sesión y variables de Supabase; toda orquestación sensible (Neon, cron, servicios externos) vive aislada en **Supabase Edge Functions**. |
-| **Acceso a Datos / ORM** | **Prisma ORM o Drizzle ORM + `@supabase/supabase-js`** | Modelado relacional tipado, migraciones limpias y consultas nativas bajo RLS. |
-| **Tareas Programadas (Cron)** | **`pg_cron` + `pg_net` / Edge Functions** | Ejecución asíncrona segura de respaldos hacia Neon, resúmenes semanales y limpieza de *branches*. |
+| **Runtime y Endpoints** | **Node.js (Next.js App Router) + Neon Functions (Node.js 24)** | Route Handlers y Server Actions tipados en servidor, complementados con funciones serverless declaradas en `neon.ts` (`neon/functions/`). |
+| **Acceso a Datos** | **`pg` (Pool PostgreSQL) + RPCs `SECURITY DEFINER`** | Transacciones aisladas por rol (`authenticated` / `anon` / `service_role`) bajo RLS nativo de PostgreSQL y migraciones DDL en `neon/migrations/`. |
+| **Autenticación** | **Better Auth + Passkeys WebAuthn + Google Workspace OAuth** | Sesiones seguras HttpOnly sobre Neon PostgreSQL, acceso por cédula o correo institucional `@etcandresbello.org` y llaves de acceso biométricas. |
 
-### 3. Base de Datos, Analítica y Tiempo Real
+### 3. Base de Datos y Analítica
 | Componente | Tecnología | Propósito Técnico |
 | :--- | :--- | :--- |
-| **Motor Relacional Recomendado (Producción & Self-Hosting)** | **[Neon Serverless Postgres](https://neon.com) (PostgreSQL 17)** | Base de datos PostgreSQL recomendada para autohospedaje y en **transición activa como motor OLTP principal** de S.I.G.A. Aporta autoescalado, *Scale-to-Zero*, *Protected Branches* para cierres inmutables de lapso, analítica/BI y *branching* instantáneo para los laboratorios SQL de **Telemática**. |
-| **Plataforma BaaS Base (Auth / Storage / Baseline)** | **Supabase** | Autenticación institucional (Google OAuth `@etcandresbello.org`, Magic Links y Passkeys WebAuthn), almacenamiento de avatares y capa BaaS inicial durante la transición hacia Neon como base de datos principal. |
+| **Motor Relacional Principal (100 % Neon)** | **[Neon Serverless Postgres](https://neon.com) (PostgreSQL 17/18)** | Motor OLTP, analítica/BI y laboratorios de S.I.G.A. Aporta autoescalado, *Scale-to-Zero*, *Protected Branches* para cierres inmutables de lapso y *branching* instantáneo para **Telemática**. |
 | **Seguridad a Nivel de Fila** | **PostgreSQL Row Level Security (RLS)** | Aislamiento estricto por rol: estudiantes solo leen sus notas; docentes solo editan sus secciones asignadas. |
 | **Base Vectorial (RAG)** | **Extensión `pgvector`** | Almacenamiento de *embeddings* de guías docentes y libros dentro del mismo PostgreSQL para el Tutor IA. |
-| **Eventos en Tiempo Real** | **Supabase Realtime / SSE** | Actualización instantánea de notificaciones académicas, trámites y alertas escolares sin recargar. |
+| **Notificaciones** | **Neon PostgreSQL + Feed API (`/api/notificaciones/feed`)** | Bandeja in-app sincronizada con RPCs protegidos y avisos automáticos vía Neon Functions → n8n → Mailtrap. |
 
-### 4. Almacenamiento Híbrido y Generación de Documentos
+### 4. Almacenamiento y Generación de Documentos
 | Componente | Tecnología | Propósito Técnico |
 | :--- | :--- | :--- |
 | **Generación de PDFs** | **`@react-pdf/renderer` (Client-Side)** | Ensamblaje de boletines, constancias y formatos MPPE en el navegador (**0 MB** de almacenamiento/cómputo en servidor). |
 | **Códigos QR** | **`qrcode.react` + `html5-qrcode`** | Emisión y lectura vía cámara móvil para carnets estudiantiles, asistencia, biblioteca y verificación de documentos. |
 | **Hojas de Cálculo** | **SheetJS (`xlsx`)** | Importación masiva de matrícula y exportación de estadísticas oficiales para Zona Educativa / CDCE. |
-| **Imágenes y Archivos** | **Supabase Storage / Cloudinary + `browser-image-compression`** | Compresión previa en cliente a formato `.webp` para fotos tipo carnet y portadas de biblioteca. |
-| **Documentos Pesados** | **Google Drive API** | Almacenamiento de informes de pasantías en PDF de 6.º año fuera de la cuota de base de datos/storage transaccional. |
+| **Imágenes y Archivos** | **Neon Object Storage (`files-sdk/neon`) + `browser-image-compression`** | Buckets declarados en `neon.ts` (`student-avatars`, `uploads`, `assets`) con compresión previa en cliente a `.webp`. |
+| **Documentos Pesados** | **Google Drive API** | Almacenamiento de informes de pasantías en PDF de 6.º año fuera de la cuota transaccional. |
 
 ### 5. Capa de Inteligencia Artificial
 | Componente | Tecnología | Propósito Técnico |
@@ -236,7 +235,7 @@ SIGA cuenta con un **Landing Page propio** (`src/app/(landing)/`) diseñado espe
 - **Contexto institucional migrado:** [`docs/CONTEXTO_INSTITUCIONAL.md`](docs/CONTEXTO_INSTITUCIONAL.md)
 - **Estructura de carpetas y rutas del stack:** [`docs/ESTRUCTURA_PROYECTO.md`](docs/ESTRUCTURA_PROYECTO.md)
 - **Especificación del Aula Virtual Unificada:** [`docs/modulos/04-AULA-VIRTUAL.md`](docs/modulos/04-AULA-VIRTUAL.md)
-- **Arquitectura PostgreSQL (Neon + Supabase y transición a Neon principal):** [`docs/ARQUITECTURA_SUPABASE_NEON.md`](docs/ARQUITECTURA_SUPABASE_NEON.md)
+- **Referencia arquitectónica de Neon y funciones serverless:** [`neon/functions/README.md`](neon/functions/README.md)
 
 ---
 
@@ -244,10 +243,9 @@ SIGA cuenta con un **Landing Page propio** (`src/app/(landing)/`) diseñado espe
 
 Este proyecto educativo sin fines de lucro es posible gracias al apoyo de iniciativas de código abierto y programas educativos verificados en el portal institucional:
 
-- **[Neon](https://neon.com):** Base de datos **PostgreSQL Serverless recomendada** para producción y *self-hosting* (en transición como motor OLTP principal), *Protected Branches* por cierre de lapso, analítica académica/BI y laboratorios SQL aislados de **Telemática**.
+- **[Neon](https://neon.com):** Infraestructura principal de **PostgreSQL Serverless** (OLTP + RLS), **Neon Object Storage**, **Neon Functions**, *Protected Branches* por cierre de lapso, analítica académica/BI y laboratorios SQL aislados de **Telemática**.
 - **GitHub:** Control de versiones, repositorio *open source* y automatización CI/CD.
 - **Cloudflare:** Aceleración global, protección WAF, DNS e infraestructura Edge para `etcandresbello.org`.
-- **Supabase:** Autenticación estudiantil/institucional (OAuth, Magic Links y Passkeys), almacenamiento de avatares y base BaaS inicial.
 - **Google Workspace:** Identidad institucional (`@etcandresbello.org`), colaboración académica y almacenamiento documental.
 - **Mailtrap:** Pruebas seguras y entrega confiable de correos transaccionales escolares.
 - **PostHog:** Analítica de producto, métricas de rendimiento y telemetría académica de SIGA.

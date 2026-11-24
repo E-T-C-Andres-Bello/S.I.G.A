@@ -1,5 +1,9 @@
-import type { DashboardUserProfile } from "@/lib/supabase/dashboard-session";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import type { DashboardUserProfile } from "@/lib/auth/dashboard-session";
+import {
+  callNeonRpcScalar,
+  isNeonDatabaseConfigured,
+  withUserDb,
+} from "@/lib/db/neon";
 import {
   isQaStudentSandboxProfile,
   QA_STUDENT_CEDULA,
@@ -91,16 +95,21 @@ export async function getQaStudentSandboxState(
     return null;
   }
 
-  const supabase = await createServerSupabaseClient();
-  if (!supabase) {
+  if (!isNeonDatabaseConfigured()) {
     return null;
   }
 
-  const { data, error } = await supabase.rpc(
-    "siga_dev_get_student_sandbox_state"
-  );
+  let data: unknown = null;
+  try {
+    data = await withUserDb(
+      { authUserId: profile.authUserId, email: profile.authEmail },
+      (client) => callNeonRpcScalar(client, "siga_dev_get_student_sandbox_state")
+    );
+  } catch {
+    data = null;
+  }
 
-  if (error || !data || typeof data !== "object") {
+  if (!data || typeof data !== "object") {
     return {
       available: false,
       access_tier: profile.accessTier,

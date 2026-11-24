@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { ROLE_HOME_PATH } from "@/components/dashboard/DashboardSidebar";
 import { StudentCurriculumHubView } from "@/components/estudiante/StudentCurriculumHubView";
 import { getStudentCurriculumOverviewData } from "@/features/estudiante/subjects-data";
-import { getAuthenticatedDashboardContext } from "@/lib/supabase/dashboard-session";
+import { getAuthenticatedDashboardContext } from "@/lib/auth/dashboard-session";
 
 export const metadata: Metadata = {
   title: 'Asignaturas y Pensum · S.I.G.A. — E.T.C. "Andrés Bello"',

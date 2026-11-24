@@ -25,8 +25,8 @@ import {
 import { cn } from "cn";
 import { NotificationsBellPopover } from "@/components/shared/NotificationsBellPopover";
 import { useNotifications } from "@/components/shared/NotificationsProvider";
-import { getBrowserSupabaseClient } from "@/lib/supabase/client";
-import type { DashboardUserProfile } from "@/lib/supabase/dashboard-session";
+import { signOutClientSession } from "@/lib/auth/client";
+import type { DashboardUserProfile } from "@/lib/auth/dashboard-session";
 
 export interface SidebarNavItem {
   id: string;
@@ -399,8 +399,7 @@ export function DashboardSidebar({
     if (signingOut) return;
     setSigningOut(true);
     try {
-      const supabase = getBrowserSupabaseClient();
-      await supabase?.auth.signOut();
+      await signOutClientSession();
     } finally {
       router.push("/");
       router.refresh();

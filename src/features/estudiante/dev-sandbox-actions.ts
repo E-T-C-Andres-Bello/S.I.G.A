@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { verifyPreEnrolledAccess } from "@/lib/supabase/auth-verification";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getServerAuthSession, isAuthConfigured } from "@/lib/auth/server";
+import { verifyPreEnrolledAccess } from "@/lib/auth/verification";
+import { callNeonRpcScalar, querySingleRow, withUserDb } from "@/lib/db/neon";
 import { isQaStudentSandboxProfile } from "@/lib/validators/student-portal";
 import { type StudentSandboxState } from "./dev-sandbox";
 
@@ -55,20 +56,15 @@ async function requireQaStudentSession() {
     };
   }
 
-  const supabase = await createServerSupabaseClient();
-  if (!supabase) {
+  if (!isAuthConfigured()) {
     return {
       ok: false as const,
       message: "El servicio escolar no está disponible.",
     };
   }
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
+  const session = await getServerAuthSession();
+  if (!session) {
     return {
       ok: false as const,
       message: "Tu sesión expiró. Vuelve a iniciar sesión.",
@@ -76,10 +72,9 @@ async function requireQaStudentSession() {
   }
 
   const verification = await verifyPreEnrolledAccess({
-    authUserId: user.id,
-    email: user.email,
+    authUserId: session.authUserId,
+    email: session.email,
     loginMethod: "credentials",
-    sessionClient: supabase,
   });
 
   if (!verification.ok || verification.primaryRole !== "estudiante") {
@@ -89,11 +84,18 @@ async function requireQaStudentSession() {
     };
   }
 
-  const { data: userRow } = await supabase
-    .from("users")
-    .select("cedula, institutional_email")
-    .eq("id", verification.internalUserId)
-    .maybeSingle<{ cedula: string; institutional_email: string | null }>();
+  const userRow = await withUserDb(
+    { authUserId: session.authUserId, email: session.email },
+    (client) =>
+      querySingleRow<{ cedula: string; institutional_email: string | null }>(
+        client,
+        `SELECT cedula, institutional_email
+           FROM public.users
+          WHERE id = $1::uuid
+          LIMIT 1`,
+        [verification.internalUserId]
+      )
+  );
 
   if (
     !userRow ||
@@ -101,7 +103,7 @@ async function requireQaStudentSession() {
       primaryRole: verification.primaryRole,
       cedula: userRow.cedula,
       institutionalEmail: userRow.institutional_email,
-      authEmail: user.email,
+      authEmail: session.email,
     })
   ) {
     return {
@@ -110,7 +112,7 @@ async function requireQaStudentSession() {
     };
   }
 
-  return { ok: true as const, supabase };
+  return { ok: true as const, authUserId: session.authUserId, authEmail: session.email };
 }
 
 function revalidateStudentRoutes() {
@@ -144,36 +146,44 @@ export async function switchQaStudentContextAction(
   const session = await requireQaStudentSession();
   if (!session.ok) return session;
 
-  const { data, error } = await session.supabase.rpc(
-    "siga_dev_switch_student_context",
-    {
-      p_mencion_code: parsed.data.mencionCode ?? undefined,
-      p_grade_year: parsed.data.gradeYear ?? undefined,
-      p_section_letter: parsed.data.sectionLetter ?? undefined,
-      p_school_year_code: parsed.data.schoolYearCode ?? undefined,
-      p_active_moment: parsed.data.activeMoment ?? undefined,
-      p_access_tier: parsed.data.accessTier ?? undefined,
-      p_reference_date: getCaracasDateIso(),
-    }
-  );
+  try {
+    const data = await withUserDb(
+      { authUserId: session.authUserId, email: session.authEmail },
+      (client) =>
+        callNeonRpcScalar<Omit<StudentSandboxState, "available">>(
+          client,
+          "siga_dev_switch_student_context",
+          {
+            p_mencion_code: parsed.data.mencionCode ?? undefined,
+            p_grade_year: parsed.data.gradeYear ?? undefined,
+            p_section_letter: parsed.data.sectionLetter ?? undefined,
+            p_school_year_code: parsed.data.schoolYearCode ?? undefined,
+            p_active_moment: parsed.data.activeMoment ?? undefined,
+            p_access_tier: parsed.data.accessTier ?? undefined,
+            p_reference_date: getCaracasDateIso(),
+          }
+        )
+    );
 
-  if (error || !data || typeof data !== "object") {
+    if (!data || typeof data !== "object") {
+      return {
+        ok: false,
+        message: "No se pudo actualizar el contexto académico de pruebas.",
+      };
+    }
+
+    revalidateStudentRoutes();
+    return { ok: true, data: toStudentSandboxState(data) };
+  } catch (err) {
+    const pgErr = err as { code?: string; message?: string };
     return {
       ok: false,
       message:
-        error?.message && error.code === "P0002"
-          ? error.message
+        pgErr?.code === "P0002" && pgErr.message
+          ? pgErr.message
           : "No se pudo actualizar el contexto académico de pruebas.",
     };
   }
-
-  revalidateStudentRoutes();
-
-  const raw = data as Omit<StudentSandboxState, "available">;
-  return {
-    ok: true,
-    data: toStudentSandboxState(raw),
-  };
 }
 
 export async function manageQaStudentSyntheticDataAction(
@@ -189,53 +199,53 @@ export async function manageQaStudentSyntheticDataAction(
   const session = await requireQaStudentSession();
   if (!session.ok) return session;
 
-  const { data: opData, error: opError } = await session.supabase.rpc(
-    "siga_dev_manage_student_synthetic_data",
-    {
-      p_action: parsed.data.action,
-      p_reference_date: getCaracasDateIso(),
-    }
-  );
+  try {
+    const { opData, stateData } = await withUserDb(
+      { authUserId: session.authUserId, email: session.authEmail },
+      async (client) => {
+        const op = await callNeonRpcScalar<{ verification_code?: string }>(
+          client,
+          "siga_dev_manage_student_synthetic_data",
+          {
+            p_action: parsed.data.action,
+            p_reference_date: getCaracasDateIso(),
+          }
+        );
+        const st = await callNeonRpcScalar<Omit<StudentSandboxState, "available">>(
+          client,
+          "siga_dev_get_student_sandbox_state"
+        );
+        return { opData: op, stateData: st };
+      }
+    );
 
-  if (opError) {
+    revalidateStudentRoutes();
+
+    if (!stateData || typeof stateData !== "object") {
+      return {
+        ok: false,
+        message: "Datos actualizados, pero no se pudo recargar el resumen.",
+      };
+    }
+
+    return {
+      ok: true,
+      data: {
+        state: toStudentSandboxState(stateData),
+        verificationCode:
+          typeof opData?.verification_code === "string"
+            ? opData.verification_code
+            : null,
+      },
+    };
+  } catch (err) {
+    const pgErr = err as { code?: string; message?: string };
     return {
       ok: false,
       message:
-        opError.code === "P0002" && opError.message
-          ? opError.message
+        pgErr?.code === "P0002" && pgErr.message
+          ? pgErr.message
           : "No se pudieron actualizar los datos sintéticos de prueba.",
     };
   }
-
-  const { data: stateData, error: stateError } = await session.supabase.rpc(
-    "siga_dev_get_student_sandbox_state"
-  );
-
-  if (stateError || !stateData || typeof stateData !== "object") {
-    revalidateStudentRoutes();
-    return {
-      ok: false,
-      message: "Datos actualizados, pero no se pudo recargar el resumen.",
-    };
-  }
-
-  revalidateStudentRoutes();
-
-  const rawState = stateData as Omit<StudentSandboxState, "available">;
-  const verificationCode =
-    opData &&
-    typeof opData === "object" &&
-    "verification_code" in opData &&
-    typeof (opData as { verification_code?: unknown }).verification_code ===
-      "string"
-      ? (opData as { verification_code: string }).verification_code
-      : null;
-
-  return {
-    ok: true,
-    data: {
-      state: toStudentSandboxState(rawState),
-      verificationCode,
-    },
-  };
 }

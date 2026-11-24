@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { AnaliticaDashboardView } from "@/components/analitica/AnaliticaDashboardView";
 import { getInstitutionalAnalyticsData } from "@/features/analitica/server";
-import { getAuthenticatedDashboardContext } from "@/lib/supabase/dashboard-session";
+import { getAuthenticatedDashboardContext } from "@/lib/auth/dashboard-session";
 
 export const metadata: Metadata = {
   title: 'Dirección y Analítica · S.I.G.A. — E.T.C. "Andrés Bello"',

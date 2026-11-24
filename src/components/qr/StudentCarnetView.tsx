@@ -31,7 +31,7 @@ import {
   generateStudentCarnetTokenAction,
   type StudentCarnetTokenPayload,
 } from "@/features/estudiante/student-actions";
-import type { DashboardUserProfile } from "@/lib/supabase/dashboard-session";
+import type { DashboardUserProfile } from "@/lib/auth/dashboard-session";
 import { formatVenezuelanCedulaDisplay } from "@/lib/validators/auth";
 
 export interface StudentCarnetViewProps {

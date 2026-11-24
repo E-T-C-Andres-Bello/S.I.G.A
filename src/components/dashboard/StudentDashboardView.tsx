@@ -26,7 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { StudentDashboardData } from "@/features/estudiante/dashboard-data";
 import type { StudentCarnetTokenPayload } from "@/features/estudiante/student-actions";
-import type { DashboardUserProfile } from "@/lib/supabase/dashboard-session";
+import type { DashboardUserProfile } from "@/lib/auth/dashboard-session";
 import { formatVenezuelanCedulaDisplay } from "@/lib/validators/auth";
 import { CountUp, SigaAnalyticsBento } from "./SigaAnalyticsBento";
 

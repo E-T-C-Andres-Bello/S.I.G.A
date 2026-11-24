@@ -1,7 +1,7 @@
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
 import { StudentDevToolbar } from "@/components/dev/StudentDevToolbar";
 import { getQaStudentSandboxState } from "@/features/estudiante/dev-sandbox";
-import { getAuthenticatedDashboardContext } from "@/lib/supabase/dashboard-session";
+import { getAuthenticatedDashboardContext } from "@/lib/auth/dashboard-session";
 
 export default async function DashboardLayout({
   children,

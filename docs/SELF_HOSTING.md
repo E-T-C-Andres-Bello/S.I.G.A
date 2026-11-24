@@ -18,7 +18,7 @@ Para cualquier despliegue propio (*self-hosting*) de S.I.G.A., **recomendamos [N
    - Impulsa los laboratorios prácticos de SQL de la mención **Telemática** mediante ramas efímeras con datos 100 % sintéticos.
 4. **Point-in-Time Restore (PITR) y Connection Pooling integrado:** Protección ante errores operativos y soporte nativo para entornos *serverless* de Next.js mediante endpoints `-pooler` y `@neondatabase/serverless`.
 
-> **Nota sobre la transición arquitectónica actual:** S.I.G.A. nació con una arquitectura híbrida (Supabase + Neon) y actualmente se encuentra en **transición planificada hacia Neon como base de datos PostgreSQL principal (OLTP)**, manteniendo la compatibilidad de autenticación (Supabase Auth / Neon Auth) y el esquema estándar en [`supabase/migrations/`](../supabase/migrations/). Consulta [`docs/ARQUITECTURA_SUPABASE_NEON.md`](./ARQUITECTURA_SUPABASE_NEON.md) para el detalle técnico.
+> **Nota arquitectónica actual:** S.I.G.A. opera 100 % sobre **Neon Serverless Postgres** (base de datos OLTP + RLS, Better Auth, Neon Object Storage y Neon Functions), con todos los artefactos consolidados en [`neon/`](../neon/) y declarados en [`neon.ts`](../neon.ts).
 
 ---
 
@@ -64,23 +64,22 @@ Crea un archivo `.env.local` en la raíz del proyecto (nunca lo subas a Git).
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 # Base de datos principal en Neon (SOLO en servidor — nunca usar prefijo NEXT_PUBLIC_)
-DATABASE_URL=postgresql://<usuario>:<password>@<endpoint>-pooler.<region>.aws.neon.tech/neondb?sslmode=require
-DIRECT_DATABASE_URL=postgresql://<usuario>:<password>@<endpoint>.<region>.aws.neon.tech/neondb?sslmode=require
+DATABASE_URL=postgresql://<usuario>:<password>@<endpoint>-pooler.<region>.aws.neon.tech/neondb?sslmode=verify-full
+DIRECT_DATABASE_URL=postgresql://<usuario>:<password>@<endpoint>.<region>.aws.neon.tech/neondb?sslmode=verify-full
 
-# Autenticación actual (Supabase Auth)
-NEXT_PUBLIC_SUPABASE_URL=https://<tu-proyecto>.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<tu-anon-key-publica>
+# Autenticación institucional (Better Auth sobre Neon PostgreSQL)
+BETTER_AUTH_SECRET=<secreto-aleatorio-de-32-bytes>
 ```
 
-> **Regla de seguridad:** Las credenciales de Neon (`DATABASE_URL` y `DIRECT_DATABASE_URL`), claves de IA o tokens de correo **jamás** deben llevar prefijo `NEXT_PUBLIC_` ni exponerse al navegador.
+> **Regla de seguridad:** Las credenciales de Neon (`DATABASE_URL` y `DIRECT_DATABASE_URL`), `BETTER_AUTH_SECRET`, claves de IA o tokens de correo **jamás** deben llevar prefijo `NEXT_PUBLIC_` ni exponerse al navegador.
 
 ---
 
 ## 5. Esquema de Base de Datos y Datos Semilla
 
-Las migraciones SQL oficiales del modelo relacional se encuentran en [`supabase/migrations/`](../supabase/migrations/) y el diseño detallado en [`docs/modulos/00-MODELO-RELACIONAL-BD.md`](./modulos/00-MODELO-RELACIONAL-BD.md).
+Las migraciones SQL oficiales del modelo relacional se encuentran en [`neon/migrations/`](../neon/migrations/) (junto al bootstrap en [`neon/bootstrap/`](../neon/bootstrap/)) y el diseño detallado en [`docs/modulos/00-MODELO-RELACIONAL-BD.md`](./modulos/00-MODELO-RELACIONAL-BD.md).
 
-- Para inicializar catálogos base (menciones, roles, permisos y estructura curricular oficial) sin datos personales reales, revisa [`supabase/seed/README.md`](../supabase/seed/README.md) y [`supabase/seed/catalogos_base.sql`](../supabase/seed/catalogos_base.sql).
+- Para aplicar migraciones y catálogos base (menciones, roles, permisos y estructura curricular oficial) sin datos personales reales, ejecuta `npm run db:migrate` y `npm run db:seed`, o revisa [`neon/seed/README.md`](../neon/seed/README.md) y [`neon/seed/catalogos_base.sql`](../neon/seed/catalogos_base.sql).
 - **Privacidad K-12:** En entornos de desarrollo, *staging* y laboratorios de Telemática sobre ramas de Neon se utilizan **exclusivamente datos sintéticos**; nunca PII real de estudiantes.
 
 ---

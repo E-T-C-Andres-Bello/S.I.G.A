@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getServerAuthSession, isAuthConfigured } from "@/lib/auth/server";
+import { verifyPreEnrolledAccess } from "@/lib/auth/verification";
 
 const aiPlanningRequestSchema = z.object({
   subjectName: z.string().min(2),
@@ -14,22 +15,36 @@ export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createServerSupabaseClient();
-    if (!supabase) {
+    if (!isAuthConfigured()) {
       return NextResponse.json(
         { error: "Servicio de autenticación no disponible." },
         { status: 503 }
       );
     }
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
+    const session = await getServerAuthSession();
+    if (!session) {
       return NextResponse.json(
         { error: "Acceso no autorizado. Inicia sesión en el portal docente." },
         { status: 401 }
+      );
+    }
+
+    const access = await verifyPreEnrolledAccess({
+      authUserId: session.authUserId,
+      email: session.email,
+      loginMethod: "credentials",
+    });
+
+    if (
+      !access.ok ||
+      !["docente", "coordinador_mencion", "direccion", "control_estudios"].includes(
+        access.primaryRole
+      )
+    ) {
+      return NextResponse.json(
+        { error: "No cuentas con permisos docentes para generar planificaciones con IA." },
+        { status: 403 }
       );
     }
 
@@ -50,7 +65,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "El Asistente de Planificación IA requiere configurar la clave de servicio (GEMINI_API_KEY).",
+            "El Asistente de Planificación IA no está habilitado temporalmente. Puedes crear las actividades manualmente.",
         },
         { status: 503 }
       );

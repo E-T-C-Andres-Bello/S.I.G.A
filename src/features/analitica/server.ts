@@ -1,7 +1,6 @@
+import type { DashboardUserProfile } from "@/lib/auth/dashboard-session";
+import { assertAuthorizedRole } from "@/lib/auth/rbac";
 import { queryInstitutionalAnalytics } from "@/lib/neon/analytics-client";
-import type { DashboardUserProfile } from "@/lib/supabase/dashboard-session";
-import { assertAuthorizedRole } from "@/lib/supabase/rbac";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type {
   AnalyticsBiOverview,
   AnalyticsFilterInput,
@@ -13,7 +12,7 @@ export type AnalyticsServerResult =
 
 /**
  * Obtiene en servidor el tablero completo de Dirección y Analítica Avanzada
- * validando sesión institucional verificada y rol autorizado.
+ * validando sesión institucional verificada y rol autorizado sobre Neon.
  */
 export async function getInstitutionalAnalyticsData(
   profile: DashboardUserProfile,
@@ -29,14 +28,8 @@ export async function getInstitutionalAnalyticsData(
     return authCheck;
   }
 
-  const supabase = await createServerSupabaseClient();
-  if (!supabase) {
-    return {
-      ok: false,
-      message: "El servicio de datos institucionales no está disponible.",
-    };
-  }
-
-  return queryInstitutionalAnalytics(supabase, filters);
+  return queryInstitutionalAnalytics(
+    { authUserId: profile.authUserId, email: profile.authEmail },
+    filters
+  );
 }
-

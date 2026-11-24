@@ -1,4 +1,9 @@
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getServerAuthSession } from "@/lib/auth/server";
+import {
+  isNeonDatabaseConfigured,
+  querySingleRow,
+  withUserDb,
+} from "@/lib/db/neon";
 import type {
   StudentRequestStatus,
   StudentRequestType,
@@ -46,9 +51,9 @@ interface EnrollmentJoinRow {
   id: string;
   grade_year: number;
   enrollment_status: string;
-  sections: { section_letter: string } | Array<{ section_letter: string }> | null;
-  menciones: { name: string } | Array<{ name: string }> | null;
-  school_years: { name: string; is_current: boolean } | Array<{ name: string; is_current: boolean }> | null;
+  section_letter: string | null;
+  mencion_name: string | null;
+  school_year_name: string | null;
 }
 
 interface RequestRow {
@@ -74,89 +79,94 @@ interface OfficialDocRow {
   payload_snapshot: Record<string, unknown> | null;
 }
 
-function unwrapSingle<T>(value: T | T[] | null | undefined): T | null {
-  if (!value) return null;
-  return Array.isArray(value) ? (value[0] ?? null) : value;
-}
-
 /**
  * Carga las solicitudes estudiantiles y los documentos oficiales emitidos
- * por Control de Estudios bajo Supabase RLS.
+ * por Control de Estudios bajo RLS en Neon.
  */
 export async function getStudentTramitesData(
   internalUserId: string
 ): Promise<StudentTramitesData> {
-  const supabase = await createServerSupabaseClient();
-  if (!supabase) {
+  if (!isNeonDatabaseConfigured()) {
     return { enrollment: null, requests: [], officialDocuments: [] };
   }
 
-  const [enrollmentResult, requestsResult, documentsResult] = await Promise.all([
-    supabase
-      .from("enrollments")
-      .select(
-        "id, grade_year, enrollment_status, sections(section_letter), menciones(name), school_years!inner(name, is_current)"
-      )
-      .eq("student_user_id", internalUserId)
-      .eq("school_years.is_current", true)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle<EnrollmentJoinRow>(),
-    supabase
-      .from("student_requests")
-      .select(
-        "id, request_type, reason, status, sla_entered_at, resolved_at, official_document_id, created_at, updated_at"
-      )
-      .eq("student_user_id", internalUserId)
-      .order("created_at", { ascending: false })
-      .returns<RequestRow[]>(),
-    supabase
-      .from("official_documents")
-      .select(
-        "id, verification_code, document_hash, document_type, status, issued_at, revoked_at, payload_snapshot"
-      )
-      .eq("student_user_id", internalUserId)
-      .order("issued_at", { ascending: false })
-      .returns<OfficialDocRow[]>(),
-  ]);
+  const session = await getServerAuthSession();
+  if (!session) {
+    return { enrollment: null, requests: [], officialDocuments: [] };
+  }
 
-  const e = enrollmentResult.data;
+  return withUserDb(
+    { authUserId: session.authUserId, email: session.email },
+    async (client) => {
+      const e = await querySingleRow<EnrollmentJoinRow>(
+        client,
+        `SELECT e.id,
+                e.grade_year,
+                e.enrollment_status,
+                s.section_letter,
+                m.name AS mencion_name,
+                sy.name AS school_year_name
+           FROM public.enrollments e
+           JOIN public.school_years sy ON sy.id = e.school_year_id AND sy.is_current = true
+           LEFT JOIN public.sections s ON s.id = e.section_id
+           LEFT JOIN public.menciones m ON m.id = e.mencion_id
+          WHERE e.student_user_id = $1::uuid
+            AND e.deleted_at IS NULL
+          ORDER BY e.created_at DESC
+          LIMIT 1`,
+        [internalUserId]
+      );
+      const requestsRes = await client.query<RequestRow>(
+        `SELECT id, request_type, reason, status, sla_entered_at, resolved_at, official_document_id, created_at, updated_at
+           FROM public.student_requests
+          WHERE student_user_id = $1::uuid
+          ORDER BY created_at DESC`,
+        [internalUserId]
+      );
+      const documentsRes = await client.query<OfficialDocRow>(
+        `SELECT id, verification_code, document_hash, document_type, status, issued_at, revoked_at, payload_snapshot
+           FROM public.official_documents
+          WHERE student_user_id = $1::uuid
+          ORDER BY issued_at DESC`,
+        [internalUserId]
+      );
 
-  return {
-    enrollment: e
-      ? {
-          id: e.id,
-          gradeYear: e.grade_year,
-          enrollmentStatus: e.enrollment_status,
-          sectionLetter: unwrapSingle(e.sections)?.section_letter ?? null,
-          mencionName: unwrapSingle(e.menciones)?.name ?? null,
-          schoolYearName: unwrapSingle(e.school_years)?.name ?? null,
-        }
-      : null,
-    requests: (requestsResult.data ?? []).map((r) => ({
-      id: r.id,
-      requestType: r.request_type,
-      reason: r.reason,
-      status: r.status,
-      slaEnteredAt: r.sla_entered_at,
-      resolvedAt: r.resolved_at,
-      officialDocumentId: r.official_document_id,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
-    })),
-    officialDocuments: (documentsResult.data ?? []).map((doc) => ({
-      id: doc.id,
-      verificationCode: doc.verification_code,
-      documentHash: doc.document_hash,
-      documentType: doc.document_type,
-      status: doc.status,
-      issuedAt: doc.issued_at,
-      revokedAt: doc.revoked_at,
-      payloadSnapshot:
-        doc.payload_snapshot && typeof doc.payload_snapshot === "object"
-          ? doc.payload_snapshot
-          : {},
-    })),
-  };
+      return {
+        enrollment: e
+          ? {
+              id: e.id,
+              gradeYear: e.grade_year,
+              enrollmentStatus: e.enrollment_status,
+              sectionLetter: e.section_letter,
+              mencionName: e.mencion_name,
+              schoolYearName: e.school_year_name,
+            }
+          : null,
+        requests: requestsRes.rows.map((r) => ({
+          id: r.id,
+          requestType: r.request_type,
+          reason: r.reason,
+          status: r.status,
+          slaEnteredAt: r.sla_entered_at,
+          resolvedAt: r.resolved_at,
+          officialDocumentId: r.official_document_id,
+          createdAt: r.created_at,
+          updatedAt: r.updated_at,
+        })),
+        officialDocuments: documentsRes.rows.map((doc) => ({
+          id: doc.id,
+          verificationCode: doc.verification_code,
+          documentHash: doc.document_hash,
+          documentType: doc.document_type,
+          status: doc.status,
+          issuedAt: doc.issued_at,
+          revokedAt: doc.revoked_at,
+          payloadSnapshot:
+            doc.payload_snapshot && typeof doc.payload_snapshot === "object"
+              ? doc.payload_snapshot
+              : {},
+        })),
+      };
+    }
+  );
 }

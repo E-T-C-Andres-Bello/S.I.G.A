@@ -11,7 +11,7 @@ import type {
 /* ------------------------------------------------------------------ */
 /*  S.I.G.A. · Analytics Bento Adaptado (basado en AnalyticsBento)     */
 /*  4 tarjetas interactivas en SVG puro (sin librerías externas)       */
-/*  conectadas a datos reales de Supabase y estado base 0 honesto.     */
+/*  conectadas a datos reales de Neon y estado base 0 honesto.        */
 /* ------------------------------------------------------------------ */
 
 type Point = { label: string; value: number; subtitle?: string };

@@ -1,6 +1,6 @@
 import { NotificationsInboxView } from "@/components/shared/NotificationsInboxView";
 import { getNotificationsInboxData } from "@/features/notificaciones/notifications-data";
-import { getAuthenticatedDashboardContext } from "@/lib/supabase/dashboard-session";
+import { getAuthenticatedDashboardContext } from "@/lib/auth/dashboard-session";
 
 export default async function NotificacionesPage() {
   const profile = await getAuthenticatedDashboardContext();

@@ -18,8 +18,9 @@ Adaptación directa de los estándares de ingeniería y seguridad de **VitaLink 
 | **Verificador Público QR** | `src/app/verificar/` | Única superficie pública para terceros (universidades/empresas); solo valida hash/ID de documento mediante RPC público controlado. |
 | **Frontend Privado (App)** | `src/app/(dashboard)/`, `src/features/` | Solo consume Server Actions, Route Handlers o servicios tipados bajo RLS; nunca expone `service_role` ni llaves de IA. |
 | **Backend Serverless** | `src/app/api/`, Server Actions | Valida sesión JWT en servidor, aplica Zod y enruta llamadas a Gemini, Groq, Drive, Mailtrap/Resend y Telegram. |
-| **Base de Datos y RLS** | `supabase/migrations/` & `prisma/` | RLS obligatorio en todas las tablas; lógica crítica y auditoría en RPCs `SECURITY DEFINER`. |
-| **Seeds** | `supabase/seed/` | Solo desarrollo/carga inicial controlada; contraseñas únicas; jamás ejecutar seeds de prueba en producción. |
+| **Base de Datos y RLS** | `neon/migrations/` & `neon/bootstrap/` | RLS obligatorio en todas las tablas; lógica crítica y auditoría en RPCs `SECURITY DEFINER`. |
+| **Seeds** | `neon/seed/` | Solo desarrollo/carga inicial controlada; contraseñas únicas; jamás ejecutar seeds de prueba en producción. |
+| **Neon Functions** | `neon/functions/` & `neon.ts` | Funciones Node.js 24 serverless declaradas en `neon.ts` (`@neon/functions`, `pg`). |
 | **Offline-First & PWA** | `src/lib/offline/` & `public/manifest/` | `@serwist/next` + `TanStack Query` + `IndexedDB`; colas de mutación idempotentes con mutex anti-doble envío. |
 | **PDFs y QR Client-Side** | `src/components/pdf/` & `src/components/qr/` | `@react-pdf/renderer` en navegador (**0 MB** en servidor) + `qrcode.react` / `html5-qrcode`. |
 | **Tipos Compartidos** | `src/types/` | Contratos DTO y `database.types.ts` sincronizados con el esquema SQL real. |
@@ -157,9 +158,9 @@ Verificar SIEMPRE estos puntos antes de dar por cerrada una feature:
    - Debajo del titular del Hero se muestra directamente el botón **«Ingresar con Google»** (`@etcandresbello.org`) y debajo la opción **«Usar correo y contraseña»**, que despliega in-place (`grid-template-rows: 0fr -> 1fr` con `inert` al cerrarse y sin modales flotantes) únicamente los campos `Correo o cédula` y `Contraseña` más el botón `Ingresar`.
    - No existe auto-registro abierto: el servidor exige cuenta `@etcandresbello.org` o cédula pre-inscrita en `public.users` con rol asignado en `user_roles`.
 10. **Migraciones SQL 100 % puras (DDL) y numeración secuencial (`00001_...`):**
-    - Toda migración en `supabase/migrations/` usa prefijo numérico secuencial (`00001_<nombre>.sql`, `00002_<nombre>.sql`, ...) y contiene **únicamente DDL** (esquemas, extensiones en `extensions`, tablas, índices, triggers, funciones, políticas RLS y `GRANT`/`REVOKE`).
-    - **Prohibido incluir `INSERT`, datos de prueba, catálogos ni credenciales dentro de `supabase/migrations/`.**
-    - Los catálogos no personales viven en `supabase/seed/catalogos_base.sql` y las semillas locales de desarrollo con credenciales de prueba viven exclusivamente en archivos `supabase/seed/*.local.sql` ignorados por `.gitignore` (jamás ejecutados en producción ni subidos a Git).
+    - Toda migración en `neon/migrations/` usa prefijo numérico secuencial (`00001_<nombre>.sql`, `00002_<nombre>.sql`, ...) y contiene **únicamente DDL** (esquemas, extensiones en `extensions`, tablas, índices, triggers, funciones, políticas RLS y `GRANT`/`REVOKE`).
+    - **Prohibido incluir `INSERT`, datos de prueba, catálogos ni credenciales dentro de `neon/migrations/`.**
+    - Los catálogos no personales viven en `neon/seed/catalogos_base.sql` y las semillas locales de desarrollo con credenciales de prueba viven exclusivamente en archivos `neon/seed/*.local.sql` ignorados por `.gitignore` (jamás ejecutados en producción ni subidos a Git).
 
 ---
 

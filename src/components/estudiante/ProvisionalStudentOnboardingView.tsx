@@ -36,11 +36,8 @@ import {
   createStudentRequestAction,
   updateRecoveryEmailAction,
 } from "@/features/estudiante/student-actions";
-import {
-  getBrowserSupabaseClient,
-  linkGoogleWorkspaceIdentity,
-} from "@/lib/supabase/client";
-import type { DashboardUserProfile } from "@/lib/supabase/dashboard-session";
+import { linkGoogleWorkspaceIdentity } from "@/lib/auth/client";
+import type { DashboardUserProfile } from "@/lib/auth/dashboard-session";
 import {
   AUTH_ERROR_MESSAGES,
   formatVenezuelanCedulaDisplay,
@@ -57,8 +54,6 @@ export interface ProvisionalStudentOnboardingViewProps {
   onboarding: ProvisionalOnboardingData;
   authErrorCode?: string | null;
 }
-
-let provisionalRealtimeSeq = 0;
 
 function isKnownAuthErrorCode(code: string | null | undefined): code is AuthErrorCode {
   return Boolean(code && code in AUTH_ERROR_MESSAGES);
@@ -101,54 +96,7 @@ export function ProvisionalStudentOnboardingView({
   const requestLockRef = React.useRef(false);
   const googleLockRef = React.useRef(false);
 
-  // Suscripción en tiempo real para actualizar estado de `activacion_workspace`
-  React.useEffect(() => {
-    const supabase = getBrowserSupabaseClient();
-    if (!supabase) return;
-
-    const topic = `siga-provisional-req-${++provisionalRealtimeSeq}`;
-    const channel = supabase
-      .channel(topic)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "student_requests",
-          filter: `student_user_id=eq.${profile.internalUserId}`,
-        },
-        (payload) => {
-          const row = (payload.new ?? payload.old) as {
-            id?: string;
-            request_type?: string;
-            status?: string;
-            reason?: string | null;
-            created_at?: string;
-            updated_at?: string;
-          } | null;
-
-          if (!row || row.request_type !== "activacion_workspace") return;
-          if (payload.eventType === "DELETE") {
-            setActivationRequest(null);
-            return;
-          }
-          if (row.id && row.status) {
-            setActivationRequest({
-              id: row.id,
-              status: row.status,
-              reason: row.reason ?? null,
-              createdAt: row.created_at ?? new Date().toISOString(),
-              updatedAt: row.updated_at ?? new Date().toISOString(),
-            });
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [profile.internalUserId]);
+  // El estado de `activacion_workspace` se sincroniza tras cada acción o recarga de página.
 
   const handleSaveRecoveryEmail = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

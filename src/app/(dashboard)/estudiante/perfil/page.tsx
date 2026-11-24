@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { ROLE_HOME_PATH } from "@/components/dashboard/DashboardSidebar";
 import { StudentProfileView } from "@/components/estudiante/StudentProfileView";
 import { getStudentProfilePageData } from "@/features/estudiante/profile-data";
-import { getAuthenticatedDashboardContext } from "@/lib/supabase/dashboard-session";
+import { getAuthenticatedDashboardContext } from "@/lib/auth/dashboard-session";
 
 type StudentProfileSection =
   | "identidad"

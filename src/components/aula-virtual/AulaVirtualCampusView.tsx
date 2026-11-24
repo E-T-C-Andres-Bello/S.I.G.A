@@ -48,7 +48,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import type { AulaVirtualCampusData } from "@/features/aula-virtual/aula-virtual-data";
-import type { DashboardUserProfile } from "@/lib/supabase/dashboard-session";
+import type { DashboardUserProfile } from "@/lib/auth/dashboard-session";
 
 export interface AulaVirtualCampusViewProps {
   profile: DashboardUserProfile;

@@ -21,7 +21,7 @@ import {
   SigaCredentialsFields,
   resolveAuthErrorMessage,
 } from "@/components/auth/SigaCredentialsFields";
-import { startGoogleWorkspaceOAuth } from "@/lib/supabase/client";
+import { startGoogleWorkspaceOAuth } from "@/lib/auth/client";
 import { HalftoneWordmarkFooter } from "@/components/ui/halftone-wordmark-footer";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { cn } from "@/lib/utils";

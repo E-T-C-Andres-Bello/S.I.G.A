@@ -25,8 +25,8 @@ import {
 } from "@/components/ui/empty";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { getAulaVirtualCampusData } from "@/features/aula-virtual/aula-virtual-data";
-import { getAuthenticatedDashboardContext } from "@/lib/supabase/dashboard-session";
-import { canRoleAccessDashboardPath } from "@/lib/supabase/rbac";
+import { getAuthenticatedDashboardContext } from "@/lib/auth/dashboard-session";
+import { canRoleAccessDashboardPath } from "@/lib/auth/rbac";
 
 interface AulaVirtualCoursePageProps {
   params: Promise<{

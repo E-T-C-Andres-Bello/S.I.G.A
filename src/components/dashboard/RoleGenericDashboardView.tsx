@@ -20,7 +20,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "cn";
-import type { DashboardUserProfile } from "@/lib/supabase/dashboard-session";
+import type { DashboardUserProfile } from "@/lib/auth/dashboard-session";
 import { formatVenezuelanCedulaDisplay } from "@/lib/validators/auth";
 import { ROLE_LABELS } from "./DashboardSidebar";
 import { CountUp } from "./SigaAnalyticsBento";
@@ -62,7 +62,7 @@ const ROLE_SPECS: Record<RoleWorkspaceKey, RoleModuleSpec> = {
     headlineItalic: "listo",
     headlineEnd: " para este período",
     description:
-      "Base del módulo docente conectada a Supabase RLS. Aquí tu equipo puede integrar planes de evaluación, carga de calificaciones y diario de clases.",
+      "Espacio del personal docente de la E.T.C. \"Andrés Bello\". Gestiona planes de evaluación, carga de calificaciones, asistencia diaria y diario de clases.",
     routePath: "src/app/(dashboard)/docente/page.tsx",
     kpis: [
       {
@@ -80,7 +80,7 @@ const ROLE_SPECS: Record<RoleWorkspaceKey, RoleModuleSpec> = {
       {
         title: "Pases de asistencia",
         subtitle: "Control diario de aula",
-        badge: "Módulo base",
+        badge: "Disponible",
         icon: CheckCircle2,
         highlighted: true,
       },
@@ -93,19 +93,19 @@ const ROLE_SPECS: Record<RoleWorkspaceKey, RoleModuleSpec> = {
     ],
     modulesList: [
       {
-        title: "Planes de Evaluación (`evaluation_plans` & `evaluation_items`)",
-        detail: "Creación y publicación de cortes evaluativos por sección.",
-        status: "Tabla y RLS listos",
+        title: "Planes de Evaluación",
+        detail: "Creación y publicación de cortes evaluativos ponderados por sección.",
+        status: "Habilitado",
       },
       {
-        title: "Carga de Notas (`siga_registrar_nota` RPC)",
-        detail: "Registro en escala MPPE 1–20 con bitácora inmutable.",
-        status: "RPC activo",
+        title: "Carga de Calificaciones",
+        detail: "Registro en escala MPPE 1–20 con trazabilidad histórica protegida.",
+        status: "Habilitado",
       },
       {
-        title: "Asistencia y Diario (`attendance_records` & `class_diary_entries`)",
-        detail: "Pase de lista por sesión y firma digital de contenidos.",
-        status: "Tabla y RLS listos",
+        title: "Asistencia y Diario de Clases",
+        detail: "Pase de lista por sesión, incidencias y registro diario de contenidos.",
+        status: "Habilitado",
       },
     ],
   },
@@ -115,7 +115,7 @@ const ROLE_SPECS: Record<RoleWorkspaceKey, RoleModuleSpec> = {
     headlineItalic: "centralizada",
     headlineEnd: " en tiempo real",
     description:
-      "Base del módulo administrativo conectada a Supabase RLS. Lista para integrar inscripción de secciones, cierres de momento y emisión de constancias con QR.",
+      "Panel institucional de Control de Estudios. Coordina inscripción de secciones, cierres de momento pedagógico y emisión de constancias verificables con código QR.",
     routePath: "src/app/(dashboard)/control-estudios/page.tsx",
     kpis: [
       {
@@ -133,7 +133,7 @@ const ROLE_SPECS: Record<RoleWorkspaceKey, RoleModuleSpec> = {
       {
         title: "Solicitudes y constancias",
         subtitle: "Verificación pública QR",
-        badge: "Módulo base",
+        badge: "Disponible",
         icon: FileSpreadsheet,
         highlighted: true,
       },
@@ -146,19 +146,19 @@ const ROLE_SPECS: Record<RoleWorkspaceKey, RoleModuleSpec> = {
     ],
     modulesList: [
       {
-        title: "Pre-inscripción y Matrícula (`users` & `enrollments`)",
+        title: "Pre-inscripción y Matrícula",
         detail: "Asignación de año, mención técnica y sección por estudiante.",
-        status: "Tabla y RLS listos",
+        status: "Disponible",
       },
       {
-        title: "Solicitudes Estudiantiles (`student_requests` & `official_documents`)",
-        detail: "Emisión de boletines y constancias verificables en `/verificar`.",
-        status: "RPC QR activo",
+        title: "Solicitudes Estudiantiles y Constancias",
+        detail: "Emisión de boletines y constancias oficiales verificables mediante código QR.",
+        status: "Disponible",
       },
       {
-        title: "Apertura y Cierre de Momentos (`momentos` & `school_years`)",
+        title: "Apertura y Cierre de Momentos",
         detail: "Control de ventanas de calificación y reaperturas autorizadas.",
-        status: "Tabla y RLS listos",
+        status: "Disponible",
       },
     ],
   },
@@ -168,7 +168,7 @@ const ROLE_SPECS: Record<RoleWorkspaceKey, RoleModuleSpec> = {
     headlineItalic: "integral",
     headlineEnd: " del plantel",
     description:
-      "Base del panel directivo para la E.T.C. \"Andrés Bello\". Lista para integrar indicadores de rendimiento por mención, auditoría MPPE y gestión de roles.",
+      "Panel directivo de la E.T.C. \"Andrés Bello\" con indicadores de rendimiento por mención, seguimiento docente y auditoría MPPE.",
     routePath: "src/app/(dashboard)/analitica/page.tsx",
     kpis: [
       {
@@ -199,19 +199,19 @@ const ROLE_SPECS: Record<RoleWorkspaceKey, RoleModuleSpec> = {
     ],
     modulesList: [
       {
-        title: "Rendimiento por Mención (`menciones` & `moment_final_grades`)",
-        detail: "Comparativa entre Aduana, Turismo y Telemática.",
-        status: "Esquema listo",
+        title: "Rendimiento por Mención",
+        detail: "Comparativa entre Aduanas, Turismo y Telemática.",
+        status: "Disponible",
       },
       {
-        title: "Gobierno de Roles (`user_roles` & `role_permissions`)",
+        title: "Gobierno de Roles",
         detail: "Asignación de coordinaciones, docentes y personal administrativo.",
-        status: "RLS activo",
+        status: "Protegido",
       },
       {
-        title: "Auditoría de Calificaciones (`grade_audit_logs`)",
-        detail: "Historial anti-tamper de modificaciones de notas.",
-        status: "Trigger activo",
+        title: "Auditoría de Calificaciones",
+        detail: "Historial protegido de modificaciones de notas.",
+        status: "Activo",
       },
     ],
   },
@@ -221,12 +221,12 @@ const ROLE_SPECS: Record<RoleWorkspaceKey, RoleModuleSpec> = {
     headlineItalic: "protegido",
     headlineEnd: " y confidencial",
     description:
-      "Base del módulo de Orientación con aislamiento estricto RLS. Lista para seguimiento socioeconómico, citaciones y actas de compromiso.",
+      "Módulo confidencial de Orientación para el seguimiento psicopedagógico, citaciones y actas de compromiso estudiantil.",
     routePath: "src/app/(dashboard)/control-estudios/orientacion/page.tsx",
     kpis: [
       {
         title: "Expedientes activos",
-        subtitle: "RLS confidencial",
+        subtitle: "Acceso confidencial",
         badge: "Privado",
         icon: HeartHandshake,
         highlighted: true,
@@ -252,14 +252,14 @@ const ROLE_SPECS: Record<RoleWorkspaceKey, RoleModuleSpec> = {
     ],
     modulesList: [
       {
-        title: "Expedientes de Orientación (`orientation_records`)",
-        detail: "Acceso exclusivo para Orientación y Dirección bajo RLS.",
-        status: "Tabla y RLS listos",
+        title: "Expedientes de Orientación",
+        detail: "Acceso exclusivo y cifrado para Orientación y Dirección.",
+        status: "Protegido",
       },
       {
-        title: "Bitácora de Seguimiento (`orientation_followups`)",
+        title: "Bitácora de Seguimiento",
         detail: "Acuerdos, entrevistas y evolución por estudiante.",
-        status: "Tabla y RLS listos",
+        status: "Disponible",
       },
     ],
   },
@@ -269,7 +269,7 @@ const ROLE_SPECS: Record<RoleWorkspaceKey, RoleModuleSpec> = {
     headlineItalic: "técnica",
     headlineEnd: " de 6.º año",
     description:
-      "Base del módulo de Pasantías. Lista para gestionar empresas aliadas, asignaciones de pasantes, bitácoras semanales y enlaces mágicos para tutores empresariales.",
+      "Gestión de empresas aliadas, asignaciones de pasantes, bitácoras semanales y enlaces de evaluación para tutores empresariales.",
     routePath: "src/app/(dashboard)/pasantias/page.tsx",
     kpis: [
       {
@@ -293,21 +293,21 @@ const ROLE_SPECS: Record<RoleWorkspaceKey, RoleModuleSpec> = {
       },
       {
         title: "Evaluaciones externas",
-        subtitle: "Magic links de tutores",
+        subtitle: "Enlaces seguros de tutores",
         badge: "Seguro",
         icon: ShieldCheck,
       },
     ],
     modulesList: [
       {
-        title: "Empresas y Plazas (`internship_companies` & `internship_placements`)",
+        title: "Empresas y Plazas de Pasantía",
         detail: "Registro de tutores académicos e industriales.",
-        status: "Tabla y RLS listos",
+        status: "Disponible",
       },
       {
-        title: "Bitácoras e Informes (`internship_weekly_logs` & `internship_reports`)",
-        detail: "Seguimiento semanal y validación por Magic Link.",
-        status: "Tabla y RLS listos",
+        title: "Bitácoras e Informes Semanales",
+        detail: "Seguimiento semanal y validación externa por enlace seguro.",
+        status: "Disponible",
       },
     ],
   },
@@ -317,7 +317,7 @@ const ROLE_SPECS: Record<RoleWorkspaceKey, RoleModuleSpec> = {
     headlineItalic: "abierto",
     headlineEnd: " a la comunidad",
     description:
-      "Base del módulo de Biblioteca. Lista para controlar préstamos de ejemplares, solvencias y reservas de espacios o equipos audiovisuales.",
+      "Control de préstamos de ejemplares, solvencias estudiantiles y reservas de espacios o equipos audiovisuales.",
     routePath: "src/app/(dashboard)/biblioteca/page.tsx",
     kpis: [
       {
@@ -348,14 +348,14 @@ const ROLE_SPECS: Record<RoleWorkspaceKey, RoleModuleSpec> = {
     ],
     modulesList: [
       {
-        title: "Inventario y Préstamos (`library_items` & `library_loans`)",
+        title: "Inventario y Préstamos",
         detail: "Control de fechas de vencimiento y devoluciones.",
-        status: "Tabla y RLS listos",
+        status: "Disponible",
       },
       {
-        title: "Recursos Audiovisuales (`audiovisual_resources` & `audiovisual_reservations`)",
+        title: "Recursos Audiovisuales",
         detail: "Reserva de proyectores, salas y laboratorios.",
-        status: "Tabla y RLS listos",
+        status: "Disponible",
       },
     ],
   },
@@ -365,7 +365,7 @@ const ROLE_SPECS: Record<RoleWorkspaceKey, RoleModuleSpec> = {
     headlineItalic: "directo",
     headlineEnd: " y verificable",
     description:
-      "Base del módulo de Representantes. Lista para consultar boletines, asistencia y avisos de los estudiantes vinculados bajo tu representación.",
+      "Consulta de boletines, asistencia y avisos institucionales de los estudiantes vinculados bajo tu representación.",
     routePath: "src/app/(dashboard)/representante/page.tsx",
     kpis: [
       {
@@ -396,9 +396,9 @@ const ROLE_SPECS: Record<RoleWorkspaceKey, RoleModuleSpec> = {
     ],
     modulesList: [
       {
-        title: "Vínculo Familiar (`student_guardians`)",
+        title: "Vínculo Familiar Verificado",
         detail: "Lectura autorizada exclusivamente para los alumnos representados.",
-        status: "Tabla y RLS listos",
+        status: "Protegido",
       },
     ],
   },
@@ -703,9 +703,9 @@ export function RoleGenericDashboardView({
         })}
       </section>
 
-      {/* Fila 3 — Guía de tablas y capacidades listas en Supabase para este rol */}
+      {/* Fila 3 — Capacidades habilitadas para este rol */}
       <motion.section
-        aria-label="Capas de base de datos listas para este módulo"
+        aria-label="Capacidades habilitadas para este módulo"
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.14, ease: [0.22, 1, 0.36, 1] }}
@@ -714,15 +714,14 @@ export function RoleGenericDashboardView({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-base leading-snug font-semibold tracking-tight text-foreground">
-              Estructura de Base de Datos Lista para Integrar
+              Herramientas Institucionales de este Espacio
             </h2>
             <p className="mt-1 text-xs leading-[1.5] text-muted-foreground">
-              Tablas, políticas RLS y funciones disponibles en{" "}
-              <code>00001_initial_baseline.sql</code> para este módulo
+              Funciones académicas y administrativas habilitadas para tu rol escolar
             </p>
           </div>
           <span className="siga-glass-inner rounded-full border px-3 py-1 text-[11px] font-medium text-foreground">
-            {spec.modulesList.length} componentes base
+            {spec.modulesList.length} áreas clave
           </span>
         </div>
 

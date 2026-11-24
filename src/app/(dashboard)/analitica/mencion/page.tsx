@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { MencionCoordinationView } from "@/components/analitica/MencionCoordinationView";
 import { getMencionCoordinationData } from "@/features/menciones/coordinacion-server";
-import { getAuthenticatedDashboardContext } from "@/lib/supabase/dashboard-session";
+import { getAuthenticatedDashboardContext } from "@/lib/auth/dashboard-session";
 
 export const metadata: Metadata = {
   title: 'Coordinación de Mención · S.I.G.A. — E.T.C. "Andrés Bello"',

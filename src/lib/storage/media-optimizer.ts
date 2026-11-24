@@ -25,7 +25,7 @@ const ALLOWED_IMAGE_MIME_TYPES = new Set([
 
 /**
  * Comprime y redimensiona imágenes en el navegador a formato `.webp` antes de subirlas
- * a Supabase Storage (fotos carnet estudiantil y portadas de Biblioteca).
+ * a Neon Object Storage (fotos carnet estudiantil y portadas de Biblioteca).
  */
 export async function compressImageToWebpClient(
   sourceFile: File,

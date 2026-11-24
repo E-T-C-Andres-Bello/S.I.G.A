@@ -1,6 +1,0 @@
-# Configuración local/CLI de Supabase para S.I.G.A.
-project_id = "isyrpjgxndfpfcswnmkd"
-
-[functions.workflow-student-request-email]
-# Invocada por triggers PostgreSQL (`pg_net`) o webhooks internos autenticados con secreto HMAC/header.
-verify_jwt = false

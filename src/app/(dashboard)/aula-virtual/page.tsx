@@ -4,8 +4,8 @@ import { AulaVirtualCampusView } from "@/components/aula-virtual/AulaVirtualCamp
 import type { MoodleWorkspaceSection } from "@/components/aula-virtual/AulaVirtualParticleHero";
 import { ROLE_HOME_PATH } from "@/components/dashboard/DashboardSidebar";
 import { getAulaVirtualCampusData } from "@/features/aula-virtual/aula-virtual-data";
-import { getAuthenticatedDashboardContext } from "@/lib/supabase/dashboard-session";
-import { canRoleAccessDashboardPath } from "@/lib/supabase/rbac";
+import { getAuthenticatedDashboardContext } from "@/lib/auth/dashboard-session";
+import { canRoleAccessDashboardPath } from "@/lib/auth/rbac";
 
 export const metadata: Metadata = {
   title: 'Aula Virtual LMS · S.I.G.A. — E.T.C. "Andrés Bello"',

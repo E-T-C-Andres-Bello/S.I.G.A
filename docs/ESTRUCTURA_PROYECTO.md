@@ -16,10 +16,12 @@ S.I.G.A/
 │   └── modulos/                           # Diseño relacional de BD y especificación completa por rol (Alumnos, Docentes, Administración)
 ├── prisma/                                # Modelado relacional y migraciones (Prisma / Drizzle)
 │   └── migrations/
-├── supabase/                              # Configuración BaaS PostgreSQL y perímetro Edge
-│   ├── functions/                         # Supabase Edge Functions (Neon backup, analítica BI y Telemática labs)
-│   ├── migrations/                        # Políticas RLS, funciones SQL y extensión pgvector
-│   └── seed/                              # Datos semilla (MPPE, pensum 1.º–6.º, nóminas)
+├── neon/                                  # Configuración PostgreSQL Neon, migraciones, seeds y Neon Functions
+│   ├── bootstrap/                         # Bootstrap de roles RLS y helpers auth.* en Neon
+│   ├── functions/                         # Neon Functions Node.js 24 (workflows de trámites y correo n8n)
+│   ├── migrations/                        # Migraciones DDL puras, políticas RLS, RPCs y pgvector
+│   └── seed/                              # Catálogos base sin PII (catalogos_base.sql) y semillas locales ignoradas
+├── neon.ts                                # Manifiesto declarativo de buckets y funciones en Neon CLI
 ├── public/                                # Activos estáticos servidos directamente
 │   ├── icons/                             # Iconos PWA (192x192, 512x512, apple-touch-icon)
 │   ├── images/
@@ -67,8 +69,9 @@ S.I.G.A/
     │   └── asistencia/
     ├── lib/                               # Infraestructura transversal y clientes de servicios
     │   ├── ai/                            # Vercel AI SDK y @google/genai (Gemini 2.5 Flash)
-    │   ├── supabase/                      # Clientes browser/server/middleware de Supabase + invocación a Edge Functions
-    │   ├── neon/                          # Wrappers tipados en cliente/SSR que invocan Edge Functions de Supabase (cero credenciales Neon en Next.js)
+    │   ├── auth/                          # Better Auth (credenciales, Google Workspace OAuth, Passkeys) y sesiones SSR
+    │   ├── db/                            # Pool PostgreSQL Neon con transacciones RLS por rol (anon/authenticated/service_role)
+    │   ├── neon/                          # Cliente analítico BI y utilidades Neon sobre PostgreSQL directo
     │   ├── offline/                       # TanStack Query + IndexedDB (idb-keyval / Dexie.js) + @serwist/next
     │   ├── storage/                       # Compresión .webp, Supabase Storage/Cloudinary y Google Drive API
     │   ├── notifications/                 # Mailtrap / Resend + React Email + Telegram Bot API

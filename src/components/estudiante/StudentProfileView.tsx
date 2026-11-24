@@ -53,18 +53,17 @@ import type {
   StudentProfilePageData,
 } from "@/features/estudiante/profile-data";
 import {
-  updateStudentAvatarUrlAction,
   updateStudentProfileContactAction,
 } from "@/features/estudiante/student-actions";
-import { compressImageToWebpClient } from "@/lib/storage/media-optimizer";
-import { getBrowserSupabaseClient } from "@/lib/supabase/client";
+import { authClient } from "@/lib/auth/client";
 import {
   enrollInstitutionalPasskey,
   isBrowserPasskeySupported,
   listInstitutionalPasskeys,
   unenrollInstitutionalPasskey,
   type PasskeyFactorSummary,
-} from "@/lib/supabase/passkeys";
+} from "@/lib/auth/passkeys";
+import { compressImageToWebpClient } from "@/lib/storage/media-optimizer";
 import { formatVenezuelanCedulaDisplay } from "@/lib/validators/auth";
 import {
   studentPasswordChangeSchema,
@@ -83,7 +82,6 @@ export interface StudentProfileViewProps {
 }
 
 const SIDEBAR_STORAGE_KEY = "siga-sidebar-expanded-v1";
-const AVATAR_BUCKET = "student-avatars";
 
 const ENROLLMENT_STATUS_LABELS: Record<string, string> = {
   pre_enrolled: "Preinscrito",
@@ -304,40 +302,29 @@ export function StudentProfileView({
         maxOutputBytes: 512 * 1024,
       });
 
-      const supabase = getBrowserSupabaseClient();
-      if (!supabase) {
-        toast.error("El servicio de archivos no está disponible en este momento.");
-        return;
-      }
+      const formData = new FormData();
+      formData.append("file", compressed.file);
 
-      const objectPath = `${data.authUserId}/avatar.webp`;
-      const { error: uploadError } = await supabase.storage
-        .from(AVATAR_BUCKET)
-        .upload(objectPath, compressed.file, {
-          contentType: "image/webp",
-          cacheControl: "3600",
-          upsert: true,
-        });
+      const uploadRes = await fetch("/api/estudiante/avatar", {
+        method: "POST",
+        body: formData,
+      });
 
-      if (uploadError) {
+      const uploadJson = (await uploadRes.json().catch(() => ({}))) as {
+        ok?: boolean;
+        avatarWebpUrl?: string | null;
+        message?: string;
+      };
+
+      if (!uploadRes.ok || !uploadJson.ok) {
         toast.error(
-          "No se pudo subir la fotografía en este momento. Verifica tu conexión e inténtalo de nuevo."
+          uploadJson.message ??
+            "No se pudo subir la fotografía en este momento. Verifica tu conexión e inténtalo de nuevo."
         );
         return;
       }
 
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(objectPath);
-      const versionedUrl = `${publicUrl}?v=${Date.now()}`;
-
-      const result = await updateStudentAvatarUrlAction(versionedUrl);
-      if (!result.ok) {
-        toast.error(result.message);
-        return;
-      }
-
-      setAvatarUrl(result.data.avatarWebpUrl);
+      setAvatarUrl(uploadJson.avatarWebpUrl ?? null);
       setLastCompressionInfo(
         `Optimizada automáticamente: ${formatBytesKb(compressed.originalBytes)} → ${formatBytesKb(compressed.compressedBytes)} (${compressed.width}×${compressed.height} px)`
       );
@@ -363,16 +350,18 @@ export function StudentProfileView({
     setAvatarBusy(true);
 
     try {
-      const supabase = getBrowserSupabaseClient();
-      if (supabase && data.authUserId) {
-        await supabase.storage
-          .from(AVATAR_BUCKET)
-          .remove([`${data.authUserId}/avatar.webp`]);
-      }
+      const res = await fetch("/api/estudiante/avatar", {
+        method: "DELETE",
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        message?: string;
+      };
 
-      const result = await updateStudentAvatarUrlAction(null);
-      if (!result.ok) {
-        toast.error(result.message);
+      if (!res.ok || !json.ok) {
+        toast.error(
+          json.message ?? "No se pudo retirar la fotografía en este momento."
+        );
         return;
       }
 
@@ -460,27 +449,26 @@ export function StudentProfileView({
       return;
     }
 
-    const supabase = getBrowserSupabaseClient();
-    if (!supabase) {
-      toast.error("El servicio de autenticación no está disponible ahora.");
-      return;
-    }
-
     setPasswordError(null);
     passwordLockRef.current = true;
     setPasswordSaving(true);
 
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: parsed.data.newPassword,
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newPassword: parsed.data.newPassword }),
       });
 
-      if (error) {
+      const json = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        message?: string;
+      };
+
+      if (!res.ok || !json.ok) {
         const friendly =
-          error.message?.toLowerCase().includes("different") ||
-          error.message?.toLowerCase().includes("same")
-            ? "La nueva contraseña debe ser diferente a la contraseña actual."
-            : "No se pudo actualizar la contraseña en este momento. Intenta iniciar sesión nuevamente.";
+          json.message ??
+          "No se pudo actualizar la contraseña en este momento. Intenta iniciar sesión nuevamente.";
         setPasswordError(friendly);
         toast.error(friendly);
         return;
@@ -539,17 +527,12 @@ export function StudentProfileView({
   // Cerrar sesiones en otros dispositivos
   const handleSignOutOtherDevices = async () => {
     if (sessionsLockRef.current) return;
-    const supabase = getBrowserSupabaseClient();
-    if (!supabase) {
-      toast.error("El servicio de sesiones no está disponible ahora.");
-      return;
-    }
 
     sessionsLockRef.current = true;
     setSigningOutOthers(true);
     try {
-      const { error } = await supabase.auth.signOut({ scope: "others" });
-      if (error) {
+      const result = await authClient.revokeOtherSessions();
+      if (result?.error) {
         toast.error(
           "No se pudieron cerrar las sesiones en otros dispositivos. Intenta nuevamente."
         );

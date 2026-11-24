@@ -1,5 +1,5 @@
-import type { DashboardUserProfile } from "@/lib/supabase/dashboard-session";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import type { DashboardUserProfile } from "@/lib/auth/dashboard-session";
+import { isNeonDatabaseConfigured, withUserDb } from "@/lib/db/neon";
 import {
   normalizeNotificationCategory,
   sanitizeNotificationActionUrl,
@@ -26,14 +26,13 @@ export interface NotificationsInboxData {
 }
 
 /**
- * Carga en servidor la bandeja personal de notificaciones del usuario autenticado (bajo RLS).
+ * Carga en servidor la bandeja personal de notificaciones del usuario autenticado (bajo RLS en Neon).
  */
 export async function getNotificationsInboxData(
   profile: DashboardUserProfile,
   limit = 60
 ): Promise<NotificationsInboxData> {
-  const supabase = await createServerSupabaseClient();
-  if (!supabase) {
+  if (!isNeonDatabaseConfigured()) {
     return {
       notifications: [],
       unreadCount: 0,
@@ -43,15 +42,22 @@ export async function getNotificationsInboxData(
     };
   }
 
-  const { data } = await supabase
-    .from("notifications")
-    .select("id, category, title, body, action_url, is_read, read_at, created_at")
-    .eq("recipient_user_id", profile.internalUserId)
-    .order("created_at", { ascending: false })
-    .limit(limit)
-    .returns<NotificationRow[]>();
+  const rows = await withUserDb(
+    { authUserId: profile.authUserId, email: profile.authEmail },
+    async (client) => {
+      const res = await client.query<NotificationRow>(
+        `SELECT id, category, title, body, action_url, is_read, read_at, created_at
+           FROM public.notifications
+          WHERE recipient_user_id = $1::uuid
+          ORDER BY created_at DESC
+          LIMIT $2`,
+        [profile.internalUserId, limit]
+      );
+      return res.rows;
+    }
+  );
 
-  const notifications: NotificationItem[] = (data ?? []).map((row) => ({
+  const notifications: NotificationItem[] = rows.map((row) => ({
     id: row.id,
     category: normalizeNotificationCategory(row.category),
     title: row.title,

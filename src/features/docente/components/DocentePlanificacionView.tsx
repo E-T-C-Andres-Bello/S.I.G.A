@@ -535,7 +535,7 @@ export function DocentePlanificacionView({
           </div>
         ) : items.length === 0 ? (
           <div className="p-8 text-center text-sm text-muted-foreground">
-            No hay actividades en este plan. Presiona "Agregar Actividad" o utiliza el Asistente IA Curricular.
+            No hay actividades en este plan. Presiona &laquo;Agregar Actividad&raquo; o utiliza el Asistente IA Curricular.
           </div>
         ) : (
           <div className="mt-4 flex flex-col gap-3">

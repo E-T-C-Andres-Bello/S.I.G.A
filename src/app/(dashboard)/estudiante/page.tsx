@@ -8,7 +8,7 @@ import { ProvisionalStudentOnboardingView } from "@/components/estudiante/Provis
 import { getStudentDashboardData } from "@/features/estudiante/dashboard-data";
 import { getProvisionalStudentOnboardingData } from "@/features/estudiante/provisional-data";
 import { generateStudentCarnetTokenAction } from "@/features/estudiante/student-actions";
-import { getAuthenticatedDashboardContext } from "@/lib/supabase/dashboard-session";
+import { getAuthenticatedDashboardContext } from "@/lib/auth/dashboard-session";
 
 export const metadata: Metadata = {
   title: 'Inicio Estudiante · S.I.G.A. — E.T.C. "Andrés Bello"',

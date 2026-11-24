@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { ROLE_HOME_PATH } from "@/components/dashboard/DashboardSidebar";
 import { StudentSubjectDetailView } from "@/components/estudiante/StudentSubjectDetailView";
 import { getStudentSubjectDetailData } from "@/features/estudiante/subjects-data";
-import { getAuthenticatedDashboardContext } from "@/lib/supabase/dashboard-session";
+import { getAuthenticatedDashboardContext } from "@/lib/auth/dashboard-session";
 
 interface EstudianteAsignaturaDetailPageProps {
   params: Promise<{

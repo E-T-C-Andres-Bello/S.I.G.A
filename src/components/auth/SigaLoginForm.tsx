@@ -4,7 +4,7 @@ import * as React from "react";
 import Image from "next/image";
 import { AlertCircle, ChevronDown, Loader2 } from "lucide-react";
 import { cn } from "cn";
-import { startGoogleWorkspaceOAuth } from "@/lib/supabase/client";
+import { startGoogleWorkspaceOAuth } from "@/lib/auth/client";
 import { INSTITUTIONAL_EMAIL_DOMAIN } from "@/lib/validators/auth";
 import {
   GoogleWorkspaceGlyph,

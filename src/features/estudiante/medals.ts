@@ -24,7 +24,7 @@ export interface StudentMedalsInput {
 
 /**
  * Calcula las medallas estudiantiles exclusivamente a partir de registros reales
- * en Supabase (sin otorgar logros artificiales).
+ * en Neon PostgreSQL (sin otorgar logros artificiales).
  */
 export function computeStudentMedals(input: StudentMedalsInput): StudentMedal[] {
   const gradedSubjects = input.subjects.filter(

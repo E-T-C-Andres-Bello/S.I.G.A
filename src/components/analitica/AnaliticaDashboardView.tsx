@@ -33,7 +33,7 @@ import type {
   AnalyticsBiOverview,
   TeacherSlaItem,
 } from "@/features/analitica/schemas";
-import type { DashboardUserProfile } from "@/lib/supabase/dashboard-session";
+import type { DashboardUserProfile } from "@/lib/auth/dashboard-session";
 import { formatVenezuelanCedulaDisplay } from "@/lib/validators/auth";
 
 type AnaliticaTabKey = "sla" | "materias" | "riesgo" | "cdce";

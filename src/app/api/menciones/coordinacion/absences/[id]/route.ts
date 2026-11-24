@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { updateTeacherAbsenceSchema } from "@/features/menciones/coordinacion-schemas";
 import { resolveAuthorizedMencionScope } from "@/features/menciones/coordinacion-server";
-import { getAuthenticatedDashboardContext } from "@/lib/supabase/dashboard-session";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getAuthenticatedDashboardContext } from "@/lib/auth/dashboard-session";
+import { isNeonDatabaseConfigured, withUserDb } from "@/lib/db/neon";
 
 const idSchema = z.string().uuid();
 
@@ -37,39 +37,43 @@ export async function PATCH(
     );
   }
 
-  const supabase = await createServerSupabaseClient();
-  if (!supabase) {
+  if (!isNeonDatabaseConfigured()) {
     return NextResponse.json(
       { error: "Servicio de datos no disponible." },
       { status: 503 }
     );
   }
 
-  const updatePayload: {
-    status: "reported" | "acknowledged" | "reorganized";
-    reviewed_by: string;
-    observation?: string;
-  } = {
-    status: parsed.data.status,
-    reviewed_by: profile.internalUserId,
-  };
+  try {
+    await withUserDb(
+      { authUserId: profile.authUserId, email: profile.authEmail },
+      async (client) => {
+        if (parsed.data.observation !== undefined) {
+          await client.query(
+            `UPDATE public.teacher_absences
+                SET status = $1,
+                    reviewed_by = $2::uuid,
+                    observation = $3
+              WHERE id = $4::uuid`,
+            [parsed.data.status, profile.internalUserId, parsed.data.observation, id]
+          );
+        } else {
+          await client.query(
+            `UPDATE public.teacher_absences
+                SET status = $1,
+                    reviewed_by = $2::uuid
+              WHERE id = $3::uuid`,
+            [parsed.data.status, profile.internalUserId, id]
+          );
+        }
+      }
+    );
 
-  if (parsed.data.observation !== undefined) {
-    updatePayload.observation = parsed.data.observation;
-  }
-
-  const { error } = await supabase
-    .from("teacher_absences")
-    .update(updatePayload)
-    .eq("id", id);
-
-  if (error) {
+    return NextResponse.json({ ok: true });
+  } catch {
     return NextResponse.json(
       { error: "No fue posible actualizar el estado de la inasistencia." },
       { status: 500 }
     );
   }
-
-  return NextResponse.json({ ok: true });
 }
-

@@ -136,7 +136,7 @@ export interface CdceMatrixRow {
 }
 
 export interface AnalyticsBiOverview {
-  source: "neon_vault" | "supabase_oltp";
+  source: "neon_vault" | "neon_oltp";
   scopedMencionId: string | null;
   schoolYears: AnalyticsSchoolYearOption[];
   menciones: AnalyticsMencionOption[];

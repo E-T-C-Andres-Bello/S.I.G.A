@@ -116,11 +116,19 @@ export function SigaCredentialsFields({
 
         const payload = (await response.json()) as {
           ok?: boolean;
+          code?: string;
           message?: string;
           redirectTo?: string;
         };
 
         if (!response.ok || !payload.ok || !payload.redirectTo) {
+          if (process.env.NODE_ENV !== "production") {
+            console.warn("[SIGA:DEV][auth:client] Respuesta no exitosa en /api/auth/login", {
+              status: response.status,
+              code: payload.code ?? "unknown",
+              message: payload.message ?? null,
+            });
+          }
           onErrorMessage(
             payload.message ??
               "No fue posible validar tus credenciales institucionales."
@@ -137,7 +145,12 @@ export function SigaCredentialsFields({
         }
         router.push(payload.redirectTo);
         router.refresh();
-      } catch {
+      } catch (error) {
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[SIGA:DEV][auth:client] Excepción de red al llamar /api/auth/login", {
+            message: error instanceof Error ? error.message : "unknown_error",
+          });
+        }
         onErrorMessage(
           "Sin respuesta del servidor de autenticación. Verifica tu conexión."
         );

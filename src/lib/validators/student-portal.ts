@@ -162,7 +162,7 @@ export const studentAvatarUrlSchema = z
   .trim()
   .max(512, "La dirección de la fotografía excede el límite permitido.")
   .regex(
-    /^https:\/\/[a-z0-9.-]+\/storage\/v1\/object\/public\/student-avatars\/[0-9a-f-]{36}\/avatar\.webp(\?v=[0-9]{1,16})?$/i,
+    /^https:\/\/[a-z0-9.-]+\/[a-z0-9/_.-]*\/[0-9a-f-]{36}\/avatar\.webp(\?v=[0-9]{1,16})?$/i,
     "La fotografía debe estar alojada en el repositorio institucional en formato WebP."
   )
   .nullable();

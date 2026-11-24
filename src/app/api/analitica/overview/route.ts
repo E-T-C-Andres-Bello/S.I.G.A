@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { analyticsFilterSchema } from "@/features/analitica/schemas";
 import { getInstitutionalAnalyticsData } from "@/features/analitica/server";
-import { getAuthenticatedDashboardContext } from "@/lib/supabase/dashboard-session";
+import { getAuthenticatedDashboardContext } from "@/lib/auth/dashboard-session";
 
 export async function GET(request: Request) {
   const profile = await getAuthenticatedDashboardContext();

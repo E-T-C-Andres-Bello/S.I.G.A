@@ -1,5 +1,11 @@
-import { createServerSupabaseClient } from "@/lib/supabase/server";
-import type { DashboardUserProfile } from "@/lib/supabase/dashboard-session";
+import type { DashboardUserProfile } from "@/lib/auth/dashboard-session";
+import { getServerAuthSession } from "@/lib/auth/server";
+import {
+  callNeonRpcTableSafe,
+  isNeonDatabaseConfigured,
+  withUserDb,
+  type NeonAuthSessionContext,
+} from "@/lib/db/neon";
 import {
   analyzeSubjectSimulation,
   type SimulatorEvaluationItem,
@@ -529,68 +535,118 @@ function buildMomentsDetailForSubject(params: {
 }
 
 async function fetchAcademicFoundation(internalUserId: string) {
-  const dbClient = await createServerSupabaseClient();
-  if (!dbClient) {
+  if (!isNeonDatabaseConfigured()) {
     return null;
   }
 
-  const [mencionesRes, curriculumRes, enrollmentsRes, pendingRes] =
-    await Promise.all([
-      dbClient
-        .from("menciones")
-        .select("id, code, name, specialty, description")
-        .eq("is_active", true)
-        .order("name", { ascending: true })
-        .returns<MencionRow[]>(),
-      dbClient
-        .from("curriculum_subjects")
-        .select(
-          "id, mencion_id, grade_year, weekly_hours, annual_hours, curriculum_component, display_order, subjects!inner(id, code, name, grading_scale, passing_threshold, is_technical_core)"
-        )
-        .eq("is_active", true)
-        .order("display_order", { ascending: true })
-        .returns<CurriculumMatrixRow[]>(),
-      dbClient
-        .from("enrollments")
-        .select(
-          "id, section_id, grade_year, mencion_id, school_year_id, enrollment_status, sections(section_letter), menciones(code, name, specialty), school_years!inner(code, name, is_current, status, start_date)"
-        )
-        .eq("student_user_id", internalUserId)
-        .is("deleted_at", null)
-        .order("grade_year", { ascending: false })
-        .returns<EnrollmentDetailRow[]>(),
-      dbClient
-        .from("pending_subject_attempts")
-        .select(
-          "id, curriculum_subject_id, attempt_number, exam_date, final_numeric, passed, curriculum_subjects(subjects(code, name))"
-        )
-        .eq("student_user_id", internalUserId)
-        .order("exam_date", { ascending: false })
-        .returns<PendingAttemptRow[]>(),
-    ]);
+  const session = await getServerAuthSession();
+  if (!session) {
+    return null;
+  }
 
-  const enrollments = enrollmentsRes.data ?? [];
+  const authSession: NeonAuthSessionContext = {
+    authUserId: session.authUserId,
+    email: session.email,
+  };
+
+  const { menciones, curriculumRows, enrollments, pendingAttempts } =
+    await withUserDb(authSession, async (client) => {
+      const mencionesRes = await client.query<MencionRow>(
+        `SELECT id, code, name, specialty, description
+           FROM public.menciones
+          WHERE is_active = true
+          ORDER BY name ASC`
+      );
+      const curriculumRes = await client.query<CurriculumMatrixRow>(
+        `SELECT cs.id,
+                cs.mencion_id,
+                cs.grade_year,
+                cs.weekly_hours,
+                cs.annual_hours,
+                cs.curriculum_component,
+                cs.display_order,
+                json_build_object(
+                  'id', s.id,
+                  'code', s.code,
+                  'name', s.name,
+                  'grading_scale', s.grading_scale,
+                  'passing_threshold', s.passing_threshold,
+                  'is_technical_core', s.is_technical_core
+                ) AS subjects
+           FROM public.curriculum_subjects cs
+           JOIN public.subjects s ON s.id = cs.subject_id
+          WHERE cs.is_active = true
+          ORDER BY cs.display_order ASC`
+      );
+      const enrollmentsRes = await client.query<EnrollmentDetailRow>(
+        `SELECT e.id,
+                e.section_id,
+                e.grade_year,
+                e.mencion_id,
+                e.school_year_id,
+                e.enrollment_status,
+                CASE WHEN sec.id IS NOT NULL THEN json_build_object('section_letter', sec.section_letter) ELSE NULL END AS sections,
+                CASE WHEN m.id IS NOT NULL THEN json_build_object('code', m.code, 'name', m.name, 'specialty', m.specialty) ELSE NULL END AS menciones,
+                json_build_object(
+                  'code', sy.code,
+                  'name', sy.name,
+                  'is_current', sy.is_current,
+                  'status', sy.status,
+                  'start_date', sy.start_date
+                ) AS school_years
+           FROM public.enrollments e
+           JOIN public.school_years sy ON sy.id = e.school_year_id
+           LEFT JOIN public.sections sec ON sec.id = e.section_id
+           LEFT JOIN public.menciones m ON m.id = e.mencion_id
+          WHERE e.student_user_id = $1::uuid
+            AND e.deleted_at IS NULL
+          ORDER BY e.grade_year DESC`,
+        [internalUserId]
+      );
+      const pendingRes = await client.query<PendingAttemptRow>(
+        `SELECT psa.id,
+                psa.curriculum_subject_id,
+                psa.attempt_number,
+                psa.exam_date,
+                psa.final_numeric,
+                psa.passed,
+                CASE WHEN cs.id IS NOT NULL THEN json_build_object('subjects', json_build_object('code', subj.code, 'name', subj.name)) ELSE NULL END AS curriculum_subjects
+           FROM public.pending_subject_attempts psa
+           LEFT JOIN public.curriculum_subjects cs ON cs.id = psa.curriculum_subject_id
+           LEFT JOIN public.subjects subj ON subj.id = cs.subject_id
+          WHERE psa.student_user_id = $1::uuid
+          ORDER BY psa.exam_date DESC`,
+        [internalUserId]
+      );
+
+      return {
+        menciones: mencionesRes.rows,
+        curriculumRows: curriculumRes.rows,
+        enrollments: enrollmentsRes.rows,
+        pendingAttempts: pendingRes.rows,
+      };
+    });
+
   const currentEnrollment =
     enrollments.find((e) => unwrapSingle(e.school_years)?.is_current) ??
     enrollments[0] ??
     null;
 
   return {
-    dbClient,
-    menciones: mencionesRes.data ?? [],
-    curriculumRows: curriculumRes.data ?? [],
+    dbClient: authSession,
+    menciones,
+    curriculumRows,
     enrollments,
     currentEnrollment,
-    pendingAttempts: pendingRes.data ?? [],
+    pendingAttempts,
   };
 }
 
 /**
- * Ejecuta todas las consultas del período activo en un único `Promise.all`
- * (sin cascadas secuenciales entre planes e ítems de evaluación).
+ * Ejecuta todas las consultas del período activo en Neon bajo una sola transacción RLS.
  */
 async function fetchActiveEnrollmentDetails(
-  dbClient: NonNullable<Awaited<ReturnType<typeof createServerSupabaseClient>>>,
+  authSession: NeonAuthSessionContext,
   enrollment: EnrollmentDetailRow,
   allEnrollmentIds: string[],
   allSchoolYearIds: string[],
@@ -600,103 +656,106 @@ async function fetchActiveEnrollmentDetails(
   const targetSchoolYearIds =
     allSchoolYearIds.length > 0 ? allSchoolYearIds : [enrollment.school_year_id];
 
-  const [
-    momentosRes,
-    teacherAssignmentsRes,
-    evalPlansRes,
-    evalItemsRes,
-    scoresRes,
-    finalGradesRes,
-    scheduleRpcRes,
-    telemetryRpcRes,
-  ] = await Promise.all([
-    dbClient
-      .from("momentos")
-      .select("id, school_year_id, moment_number, name, status")
-      .in("school_year_id", targetSchoolYearIds)
-      .order("moment_number", { ascending: true })
-      .returns<MomentRow[]>(),
-    dbClient
-      .from("teacher_assignments")
-      .select("id, curriculum_subject_id")
-      .eq("school_year_id", enrollment.school_year_id)
-      .eq("section_id", enrollment.section_id)
-      .eq("is_active", true)
-      .returns<TeacherAssignmentRow[]>(),
-    isVerified
-      ? dbClient
-          .from("evaluation_plans")
-          .select(
-            "id, teacher_assignment_id, momento_id, title, status, teacher_assignments!inner(school_year_id, section_id)"
+  return withUserDb(authSession, async (client) => {
+    const momentosRes = await client.query<MomentRow>(
+      `SELECT id, school_year_id, moment_number, name, status
+         FROM public.momentos
+        WHERE school_year_id = ANY($1::uuid[])
+        ORDER BY moment_number ASC`,
+      [targetSchoolYearIds]
+    );
+    const teacherAssignmentsRes = await client.query<TeacherAssignmentRow>(
+      `SELECT id, curriculum_subject_id
+         FROM public.teacher_assignments
+        WHERE school_year_id = $1::uuid
+          AND section_id = $2::uuid
+          AND is_active = true`,
+      [enrollment.school_year_id, enrollment.section_id]
+    );
+    const evalPlansRes = isVerified
+      ? await client.query<EvalPlanRow>(
+          `SELECT ep.id, ep.teacher_assignment_id, ep.momento_id, ep.title, ep.status
+             FROM public.evaluation_plans ep
+             JOIN public.teacher_assignments ta ON ta.id = ep.teacher_assignment_id
+            WHERE ta.school_year_id = $1::uuid
+              AND ta.section_id = $2::uuid
+              AND ep.status = ANY($3::text[])`,
+          [enrollment.school_year_id, enrollment.section_id, ["published", "locked"]]
+        )
+      : { rows: [] as EvalPlanRow[] };
+    const evalItemsRes = isVerified
+      ? await client.query<EvalItemRow>(
+          `SELECT ei.id,
+                  ei.evaluation_plan_id,
+                  ei.title,
+                  ei.evaluation_type,
+                  ei.weight_percent,
+                  ei.max_points,
+                  ei.scheduled_date
+             FROM public.evaluation_items ei
+             JOIN public.evaluation_plans ep ON ep.id = ei.evaluation_plan_id
+             JOIN public.teacher_assignments ta ON ta.id = ep.teacher_assignment_id
+            WHERE ta.school_year_id = $1::uuid
+              AND ta.section_id = $2::uuid
+              AND ep.status = ANY($3::text[])
+            ORDER BY ei.scheduled_date ASC NULLS LAST`,
+          [enrollment.school_year_id, enrollment.section_id, ["published", "locked"]]
+        )
+      : { rows: [] as EvalItemRow[] };
+    const scoresRes = isVerified
+      ? await client.query<StudentScoreDetailRow>(
+          `SELECT evaluation_item_id, numeric_score, literal_grade, source
+             FROM public.student_scores
+            WHERE enrollment_id = $1::uuid
+              AND deleted_at IS NULL`,
+          [enrollment.id]
+        )
+      : { rows: [] as StudentScoreDetailRow[] };
+    const finalGradesRes =
+      allEnrollmentIds.length > 0
+        ? await client.query<MomentFinalGradeDetailRow>(
+            `SELECT enrollment_id,
+                    momento_id,
+                    curriculum_subject_id,
+                    raw_weighted_avg,
+                    final_numeric,
+                    final_literal,
+                    qualitative_observation,
+                    is_locked
+               FROM public.moment_final_grades
+              WHERE enrollment_id = ANY($1::uuid[])`,
+            [allEnrollmentIds]
           )
-          .eq("teacher_assignments.school_year_id", enrollment.school_year_id)
-          .eq("teacher_assignments.section_id", enrollment.section_id)
-          .in("status", ["published", "locked"])
-          .returns<EvalPlanRow[]>()
-      : Promise.resolve({ data: [] as EvalPlanRow[] }),
-    isVerified
-      ? dbClient
-          .from("evaluation_items")
-          .select(
-            "id, evaluation_plan_id, title, evaluation_type, weight_percent, max_points, scheduled_date, evaluation_plans!inner(status, teacher_assignments!inner(school_year_id, section_id))"
-          )
-          .eq(
-            "evaluation_plans.teacher_assignments.school_year_id",
-            enrollment.school_year_id
-          )
-          .eq(
-            "evaluation_plans.teacher_assignments.section_id",
-            enrollment.section_id
-          )
-          .in("evaluation_plans.status", ["published", "locked"])
-          .order("scheduled_date", { ascending: true, nullsFirst: false })
-          .returns<EvalItemRow[]>()
-      : Promise.resolve({ data: [] as EvalItemRow[] }),
-    isVerified
-      ? dbClient
-          .from("student_scores")
-          .select("evaluation_item_id, numeric_score, literal_grade, source")
-          .eq("enrollment_id", enrollment.id)
-          .is("deleted_at", null)
-          .returns<StudentScoreDetailRow[]>()
-      : Promise.resolve({ data: [] as StudentScoreDetailRow[] }),
-    allEnrollmentIds.length > 0
-      ? dbClient
-          .from("moment_final_grades")
-          .select(
-            "enrollment_id, momento_id, curriculum_subject_id, raw_weighted_avg, final_numeric, final_literal, qualitative_observation, is_locked"
-          )
-          .in("enrollment_id", allEnrollmentIds)
-          .returns<MomentFinalGradeDetailRow[]>()
-      : Promise.resolve({ data: [] as MomentFinalGradeDetailRow[] }),
-    isVerified
-      ? dbClient.rpc("siga_get_student_section_schedule")
-      : Promise.resolve({ data: null }),
-    isVerified
-      ? dbClient.rpc("siga_get_student_subject_telemetry")
-      : Promise.resolve({ data: null, error: null }),
-  ]);
+        : { rows: [] as MomentFinalGradeDetailRow[] };
+    const scheduleRows = isVerified
+      ? await callNeonRpcTableSafe<ScheduleRpcRow>(
+          client,
+          "siga_get_student_section_schedule"
+        )
+      : ([] as ScheduleRpcRow[]);
+    const telemetryRows = isVerified
+      ? await callNeonRpcTableSafe<TelemetryRpcRow>(
+          client,
+          "siga_get_student_subject_telemetry"
+        )
+      : ([] as TelemetryRpcRow[]);
 
-  const allMomentos = momentosRes.data ?? [];
+    const allMomentos = momentosRes.rows;
 
-  return {
-    allMomentos,
-    momentos: allMomentos.filter(
-      (m) => m.school_year_id === enrollment.school_year_id
-    ),
-    teacherAssignments: teacherAssignmentsRes.data ?? [],
-    evalPlans: evalPlansRes.data ?? [],
-    evalItems: evalItemsRes.data ?? [],
-    scores: scoresRes.data ?? [],
-    finalGrades: finalGradesRes.data ?? [],
-    scheduleRows: Array.isArray(scheduleRpcRes.data)
-      ? (scheduleRpcRes.data as ScheduleRpcRow[])
-      : [],
-    telemetryRows:
-      !telemetryRpcRes.error && Array.isArray(telemetryRpcRes.data)
-        ? (telemetryRpcRes.data as TelemetryRpcRow[])
-        : [],
-  };
+    return {
+      allMomentos,
+      momentos: allMomentos.filter(
+        (m) => m.school_year_id === enrollment.school_year_id
+      ),
+      teacherAssignments: teacherAssignmentsRes.rows,
+      evalPlans: evalPlansRes.rows,
+      evalItems: evalItemsRes.rows,
+      scores: scoresRes.rows,
+      finalGrades: finalGradesRes.rows,
+      scheduleRows,
+      telemetryRows,
+    };
+  });
 }
 
 function indexEnrollmentDetails(

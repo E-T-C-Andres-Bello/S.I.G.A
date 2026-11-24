@@ -1,5 +1,9 @@
-import { createServerSupabaseClient } from "@/lib/supabase/server";
-import type { DashboardUserProfile } from "@/lib/supabase/dashboard-session";
+import type { DashboardUserProfile } from "@/lib/auth/dashboard-session";
+import {
+  callNeonRpcScalar,
+  isNeonDatabaseConfigured,
+  withUserDb,
+} from "@/lib/db/neon";
 import type { StudentScheduleBlock } from "./dashboard-data";
 import {
   computeAttendanceHealth,
@@ -146,8 +150,7 @@ export async function getStudentAttendanceOverviewData(
     };
   }
 
-  const dbClient = await createServerSupabaseClient();
-  if (!dbClient) {
+  if (!isNeonDatabaseConfigured()) {
     return {
       hasEnrollment: false,
       todayIso: fallbackToday,
@@ -166,11 +169,17 @@ export async function getStudentAttendanceOverviewData(
     };
   }
 
-  const { data: rpcRaw, error } = await dbClient.rpc(
-    "siga_get_student_attendance_overview"
-  );
+  let rpcRaw: unknown = null;
+  try {
+    rpcRaw = await withUserDb(
+      { authUserId: profile.authUserId, email: profile.authEmail },
+      (client) => callNeonRpcScalar(client, "siga_get_student_attendance_overview")
+    );
+  } catch {
+    rpcRaw = null;
+  }
 
-  if (error || !rpcRaw || typeof rpcRaw !== "object" || Array.isArray(rpcRaw)) {
+  if (!rpcRaw || typeof rpcRaw !== "object" || Array.isArray(rpcRaw)) {
     return {
       hasEnrollment: false,
       todayIso: fallbackToday,

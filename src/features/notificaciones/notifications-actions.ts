@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getServerAuthSession, isAuthConfigured } from "@/lib/auth/server";
+import { callNeonRpcScalar, withUserDb } from "@/lib/db/neon";
 
 type ActionResult<T = undefined> =
   | ({ ok: true } & (T extends undefined ? Record<never, never> : { data: T }))
@@ -25,99 +26,94 @@ export async function markNotificationReadAction(
     };
   }
 
-  const supabase = await createServerSupabaseClient();
-  if (!supabase) {
+  if (!isAuthConfigured()) {
     return {
       ok: false,
       message: "El servicio institucional no está disponible en este momento.",
     };
   }
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
+  const session = await getServerAuthSession();
+  if (!session) {
     return {
       ok: false,
       message: "Tu sesión expiró. Inicia sesión nuevamente.",
     };
   }
 
-  const { data, error } = await supabase.rpc("siga_marcar_notificacion_leida", {
-    p_notification_id: parsed.data.notificationId,
-    p_is_read: parsed.data.isRead,
-  });
+  try {
+    const data = await withUserDb(
+      { authUserId: session.authUserId, email: session.email },
+      (client) =>
+        callNeonRpcScalar<{ id?: string; is_read?: boolean; read_at?: string | null }>(
+          client,
+          "siga_marcar_notificacion_leida",
+          {
+            p_notification_id: parsed.data.notificationId,
+            p_is_read: parsed.data.isRead,
+          }
+        )
+    );
 
-  if (error) {
+    revalidatePath("/notificaciones");
+
+    return {
+      ok: true,
+      data: {
+        id: data?.id ?? parsed.data.notificationId,
+        isRead:
+          typeof data?.is_read === "boolean"
+            ? data.is_read
+            : parsed.data.isRead,
+        readAt: data?.read_at ?? (parsed.data.isRead ? new Date().toISOString() : null),
+      },
+    };
+  } catch {
     return {
       ok: false,
       message: "No se pudo actualizar el estado de la notificación.",
     };
   }
-
-  revalidatePath("/notificaciones");
-
-  const payload =
-    data && typeof data === "object"
-      ? (data as { id?: string; is_read?: boolean; read_at?: string | null })
-      : null;
-
-  return {
-    ok: true,
-    data: {
-      id: payload?.id ?? parsed.data.notificationId,
-      isRead:
-        typeof payload?.is_read === "boolean"
-          ? payload.is_read
-          : parsed.data.isRead,
-      readAt: payload?.read_at ?? (parsed.data.isRead ? new Date().toISOString() : null),
-    },
-  };
 }
 
 export async function markAllNotificationsReadAction(): Promise<
   ActionResult<{ updatedCount: number }>
 > {
-  const supabase = await createServerSupabaseClient();
-  if (!supabase) {
+  if (!isAuthConfigured()) {
     return {
       ok: false,
       message: "El servicio institucional no está disponible en este momento.",
     };
   }
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
+  const session = await getServerAuthSession();
+  if (!session) {
     return {
       ok: false,
       message: "Tu sesión expiró. Inicia sesión nuevamente.",
     };
   }
 
-  const { data, error } = await supabase.rpc(
-    "siga_marcar_todas_notificaciones_leidas"
-  );
+  try {
+    const data = await withUserDb(
+      { authUserId: session.authUserId, email: session.email },
+      (client) =>
+        callNeonRpcScalar<{ updated_count?: number }>(
+          client,
+          "siga_marcar_todas_notificaciones_leidas"
+        )
+    );
 
-  if (error) {
+    revalidatePath("/notificaciones");
+
+    return {
+      ok: true,
+      data: { updatedCount: Number(data?.updated_count ?? 0) },
+    };
+  } catch {
     return {
       ok: false,
       message: "No se pudieron marcar todas las notificaciones como leídas.",
     };
   }
-
-  revalidatePath("/notificaciones");
-
-  const updatedCount =
-    data && typeof data === "object" && "updated_count" in data
-      ? Number((data as { updated_count?: number }).updated_count ?? 0)
-      : 0;
-
-  return {
-    ok: true,
-    data: { updatedCount },
-  };
 }

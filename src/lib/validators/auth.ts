@@ -11,7 +11,7 @@ export type AuthErrorCode =
   | "role_missing"
   | "account_suspended"
   | "oauth_failed"
-  | "supabase_not_configured"
+  | "auth_not_configured"
   | "schema_not_ready";
 
 export const AUTH_ERROR_MESSAGES: Record<AuthErrorCode, string> = {
@@ -25,7 +25,7 @@ export const AUTH_ERROR_MESSAGES: Record<AuthErrorCode, string> = {
     "Tu acceso institucional se encuentra suspendido temporalmente. Acude a Control de Estudios.",
   oauth_failed:
     "No se pudo completar la verificación con Google Workspace. Intenta nuevamente.",
-  supabase_not_configured:
+  auth_not_configured:
     "El servicio de acceso escolar no está disponible temporalmente en este entorno.",
   schema_not_ready:
     "Acceso bloqueado por seguridad: la verificación de matrícula en base de datos aún no está inicializada.",

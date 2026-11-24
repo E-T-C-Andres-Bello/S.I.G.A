@@ -39,7 +39,7 @@ import type {
   SubjectEvaluationItemDetail,
   SubjectMomentDetail,
 } from "@/features/estudiante/subjects-data";
-import type { DashboardUserProfile } from "@/lib/supabase/dashboard-session";
+import type { DashboardUserProfile } from "@/lib/auth/dashboard-session";
 
 export interface SubjectMomentsWorkspaceProps {
   accessTier: DashboardUserProfile["accessTier"];

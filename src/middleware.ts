@@ -1,6 +1,9 @@
-import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { getSupabasePublicConfig } from "@/lib/supabase/env";
+
+const SESSION_COOKIE_NAMES = [
+  "better-auth.session_token",
+  "__Secure-better-auth.session_token",
+] as const;
 
 const PROTECTED_DASHBOARD_PREFIXES = [
   "/estudiante",
@@ -11,6 +14,7 @@ const PROTECTED_DASHBOARD_PREFIXES = [
   "/pasantias",
   "/aula-virtual",
   "/representante",
+  "/notificaciones",
 ];
 
 function isProtectedDashboardRoute(pathname: string): boolean {
@@ -32,50 +36,30 @@ function applySecurityHeaders(response: NextResponse): NextResponse {
 
 export async function middleware(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
-  let response = NextResponse.next({
+  const response = NextResponse.next({
     request: {
       headers: request.headers,
     },
   });
 
-  const config = getSupabasePublicConfig();
-  if (!config) {
-    if (isProtectedDashboardRoute(pathname)) {
-      const loginUrl = new URL("/?auth_error=supabase_not_configured", request.url);
-      return applySecurityHeaders(NextResponse.redirect(loginUrl));
-    }
-    return applySecurityHeaders(response);
-  }
-
-  const supabase = createServerClient(config.url, config.anonKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll(cookiesToSet) {
-        for (const { name, value } of cookiesToSet) {
-          request.cookies.set(name, value);
-        }
-        response = NextResponse.next({
-          request: {
-            headers: request.headers,
-          },
+  if (isProtectedDashboardRoute(pathname)) {
+    // Verificación ligera de cookie Better Auth en Edge; la validación criptográfica
+    // y de matrícula/rol se ejecuta en `getAuthenticatedDashboardContext()`.
+    const hasSessionCookie = SESSION_COOKIE_NAMES.some((name) =>
+      Boolean(request.cookies.get(name)?.value)
+    );
+    if (!hasSessionCookie) {
+      if (process.env.NODE_ENV !== "production") {
+        const presentCookieNames = request.cookies.getAll().map((c) => c.name);
+        console.warn("[SIGA:DEV][middleware] Redirigiendo ruta protegida sin cookie de sesión", {
+          pathname,
+          presentCookieNames,
         });
-        for (const { name, value, options } of cookiesToSet) {
-          response.cookies.set(name, value, options);
-        }
-      },
-    },
-  });
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user && isProtectedDashboardRoute(pathname)) {
-    const redirectUrl = new URL("/", request.url);
-    redirectUrl.searchParams.set("next", pathname);
-    return applySecurityHeaders(NextResponse.redirect(redirectUrl));
+      }
+      const redirectUrl = new URL("/", request.url);
+      redirectUrl.searchParams.set("next", pathname);
+      return applySecurityHeaders(NextResponse.redirect(redirectUrl));
+    }
   }
 
   return applySecurityHeaders(response);

@@ -30,7 +30,7 @@ import {
 import {
   assertAuthorizedRole,
   canRoleAccessDashboardPath,
-} from "../../../lib/supabase/rbac";
+} from "../../../lib/auth/rbac";
 import {
   computeContentSha256,
   computeTextSimilarityScore,
@@ -546,7 +546,7 @@ test("student profile schemas validate contact, emergency cedula, avatar URLs, a
 
   assert.equal(
     studentAvatarUrlSchema.safeParse(
-      "https://isyrpjgxndfpfcswnmkd.supabase.co/storage/v1/object/public/student-avatars/550e8400-e29b-41d4-a716-446655440000/avatar.webp?v=1795200000000"
+      "https://storage.us-east-2.neon.tech/student-avatars/550e8400-e29b-41d4-a716-446655440000/avatar.webp?v=1795200000000"
     ).success,
     true
   );

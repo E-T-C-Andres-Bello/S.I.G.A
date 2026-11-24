@@ -5,13 +5,16 @@ import {
   detectsDirectHomeworkSolveAttempt,
 } from "@/lib/ai/socratic-tutor-guard";
 import { redactSigaPii } from "@/lib/analytics/sentry-scrub";
+import { getServerAuthSession, isAuthConfigured } from "@/lib/auth/server";
+import { getGeminiServerApiKey } from "@/lib/auth/server-secrets";
+import { verifyPreEnrolledAccess } from "@/lib/auth/verification";
+import { querySingleRow, withUserDb } from "@/lib/db/neon";
 import {
   enforceRateLimit,
   resolveRequestClientIp,
 } from "@/lib/security/rate-limit";
-import { verifyPreEnrolledAccess } from "@/lib/supabase/auth-verification";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getGeminiServerApiKey } from "@/lib/supabase/server-secrets";
+
+export const runtime = "nodejs";
 
 const tutorQuerySchema = z.object({
   virtualCourseId: z.string().uuid("Curso virtual inválido."),
@@ -22,13 +25,6 @@ const tutorQuerySchema = z.object({
     .max(1200, "La consulta no puede exceder los 1200 caracteres."),
 });
 
-/**
- * Endpoint protegido del Tutor Socrático RAG (`/api/ai/tutor`).
- * - Exige sesión estudiantil o docente verificada (`@etcandresbello.org`).
- * - Aplica Rate Limiting y desidentificación de PII (`redactSigaPii`).
- * - Nunca fabrica respuestas simuladas: si el curso aún no tiene guías indexadas o la llave
- *   de IA no está configurada en el servidor, informa el estado real de forma transparente.
- */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const clientIp = resolveRequestClientIp(request);
   const rate = await enforceRateLimit({
@@ -53,8 +49,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const supabase = await createServerSupabaseClient();
-  if (!supabase) {
+  if (!isAuthConfigured()) {
     return NextResponse.json(
       {
         ok: false,
@@ -65,12 +60,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
+  const session = await getServerAuthSession();
+  if (!session) {
     return NextResponse.json(
       {
         ok: false,
@@ -82,10 +73,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const verification = await verifyPreEnrolledAccess({
-    authUserId: user.id,
-    email: user.email,
+    authUserId: session.authUserId,
+    email: session.email,
     loginMethod: "credentials",
-    sessionClient: supabase,
   });
 
   if (!verification.ok) {
@@ -136,18 +126,34 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // Verificar acceso al curso bajo RLS y si el docente habilitó el Tutor IA
-  const { data: courseRow, error: courseError } = await supabase
-    .from("virtual_courses")
-    .select("id, ai_tutor_enabled, is_published")
-    .eq("id", parsed.data.virtualCourseId)
-    .maybeSingle<{
-      id: string;
-      ai_tutor_enabled: boolean;
-      is_published: boolean;
-    }>();
+  let courseRow: {
+    id: string;
+    ai_tutor_enabled: boolean;
+    is_published: boolean;
+  } | null = null;
 
-  if (courseError || !courseRow) {
+  try {
+    courseRow = await withUserDb(
+      { authUserId: session.authUserId, email: session.email },
+      (client) =>
+        querySingleRow<{
+          id: string;
+          ai_tutor_enabled: boolean;
+          is_published: boolean;
+        }>(
+          client,
+          `SELECT id, ai_tutor_enabled, is_published
+             FROM public.virtual_courses
+            WHERE id = $1::uuid
+            LIMIT 1`,
+          [parsed.data.virtualCourseId]
+        )
+    );
+  } catch {
+    courseRow = null;
+  }
+
+  if (!courseRow) {
     return NextResponse.json(
       {
         ok: false,
@@ -172,7 +178,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const geminiApiKey = getGeminiServerApiKey();
   if (!geminiApiKey) {
-    // Regla Innegociable #3: Cero respuestas simuladas cuando el motor IA no está configurado
     return NextResponse.json(
       {
         ok: false,
