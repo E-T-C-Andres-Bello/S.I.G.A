@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import { passkey } from "@better-auth/passkey";
@@ -84,6 +85,10 @@ function createBetterAuthInstance() {
       modelName: "auth_session",
       expiresIn: 60 * 60 * 24 * 7,
       updateAge: 60 * 60 * 24,
+      cookieCache: {
+        enabled: true,
+        maxAge: 60,
+      },
     },
     account: {
       modelName: "auth_account",
@@ -144,41 +149,49 @@ export function getAuth(): BetterAuthInstance {
   }
 
   const instance = createBetterAuthInstance();
-  if (process.env.NODE_ENV !== "production") {
-    globalThis.__sigaBetterAuthV2 = instance;
-  }
+  globalThis.__sigaBetterAuthV2 = instance;
   return instance;
 }
 
 /**
- * Obtiene la sesión autenticada actual validada contra Neon PostgreSQL.
+ * Obtiene la sesión autenticada actual validada por Better Auth (con deduplicación
+ * por request vía React.cache y Cookie Cache firmada con BETTER_AUTH_SECRET).
  */
-export async function getServerAuthSession(): Promise<ServerAuthSession | null> {
-  if (!isAuthConfigured()) {
-    devWarn("auth:session", "Autenticación no configurada (falta DATABASE_URL o BETTER_AUTH_SECRET)");
-    return null;
-  }
-
-  try {
-    const auth = getAuth();
-    const session = await auth.api.getSession({
-      headers: await headers(),
-    });
-
-    if (!session?.user?.id) {
+export const getServerAuthSession = cache(
+  async (): Promise<ServerAuthSession | null> => {
+    if (!isAuthConfigured()) {
+      devWarn(
+        "auth:session",
+        "Autenticación no configurada (falta DATABASE_URL o BETTER_AUTH_SECRET)"
+      );
       return null;
     }
 
-    return {
-      authUserId: session.user.id,
-      email: session.user.email ?? null,
-      name: session.user.name ?? null,
-    };
-  } catch (error) {
-    devError("auth:session", "Error validando sesión Better Auth en servidor", error);
-    return null;
+    try {
+      const auth = getAuth();
+      const session = await auth.api.getSession({
+        headers: await headers(),
+      });
+
+      if (!session?.user?.id) {
+        return null;
+      }
+
+      return {
+        authUserId: session.user.id,
+        email: session.user.email ?? null,
+        name: session.user.name ?? null,
+      };
+    } catch (error) {
+      devError(
+        "auth:session",
+        "Error validando sesión Better Auth en servidor",
+        error
+      );
+      return null;
+    }
   }
-}
+);
 
 /**
  * Cierra la sesión actual del usuario en servidor limpiando cookies HttpOnly.

@@ -1,33 +1,27 @@
 import { NextResponse } from "next/server";
-import { getServerAuthSession, isAuthConfigured } from "@/lib/auth/server";
-import { verifyPreEnrolledAccess } from "@/lib/auth/verification";
+import { resolveDashboardUserContextOrNull } from "@/lib/auth/dashboard-session";
 import { withUserDb } from "@/lib/db/neon";
 
 export const runtime = "nodejs";
 
 export async function GET(): Promise<NextResponse> {
-  if (!isAuthConfigured()) {
-    return NextResponse.json({ ok: false, items: [] }, { status: 503 });
+  const resolved = await resolveDashboardUserContextOrNull();
+
+  if (!resolved.ok) {
+    const status =
+      resolved.reason === "not_configured"
+        ? 503
+        : resolved.reason === "no_session"
+          ? 401
+          : 403;
+    return NextResponse.json({ ok: false, items: [] }, { status });
   }
 
-  const session = await getServerAuthSession();
-  if (!session) {
-    return NextResponse.json({ ok: false, items: [] }, { status: 401 });
-  }
-
-  const verification = await verifyPreEnrolledAccess({
-    authUserId: session.authUserId,
-    email: session.email,
-    loginMethod: "credentials",
-  });
-
-  if (!verification.ok) {
-    return NextResponse.json({ ok: false, items: [] }, { status: 403 });
-  }
+  const { profile } = resolved;
 
   try {
     const rows = await withUserDb(
-      { authUserId: session.authUserId, email: session.email },
+      { authUserId: profile.authUserId, email: profile.authEmail },
       async (client) => {
         const res = await client.query<{
           id: string;
@@ -44,7 +38,7 @@ export async function GET(): Promise<NextResponse> {
             WHERE recipient_user_id = $1::uuid
             ORDER BY created_at DESC
             LIMIT 40`,
-          [verification.internalUserId]
+          [profile.internalUserId]
         );
         return res.rows;
       }

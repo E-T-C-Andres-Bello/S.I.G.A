@@ -63,12 +63,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
+    const rpcName = parsed.data.startsWith("SIGA-CV-")
+      ? "siga_public_verificar_portafolio"
+      : "siga_public_verificar_documento";
     const data = await withAnonDb((client) =>
-      callNeonRpcScalar<Record<string, unknown>>(
-        client,
-        "siga_public_verificar_documento",
-        { p_verification_code: parsed.data }
-      )
+      callNeonRpcScalar<Record<string, unknown>>(client, rpcName, {
+        p_verification_code: parsed.data,
+      })
     );
 
     if (!data || typeof data !== "object") {

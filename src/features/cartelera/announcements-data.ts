@@ -1,5 +1,10 @@
 import type { DashboardUserProfile } from "@/lib/auth/dashboard-session";
-import { callNeonRpcTableSafe, withUserDb } from "@/lib/db/neon";
+import { getCachedAcademicCatalog } from "@/lib/db/catalog-cache";
+import {
+  callNeonRpcTable,
+  callNeonRpcTableSafe,
+  withUserDb,
+} from "@/lib/db/neon";
 import {
   ANNOUNCEMENT_CATEGORIES,
   resolveAnnouncementPalette,
@@ -163,13 +168,12 @@ export async function getSchoolBulletinData(
 
       let menciones: BulletinMentionOption[] = [];
       if (canPublish) {
-        const mencionesRes = await client.query<BulletinMentionOption>(
-          `SELECT id, code, name
-             FROM public.menciones
-            WHERE is_active = true
-            ORDER BY name ASC`
-        );
-        menciones = mencionesRes.rows;
+        const catalog = await getCachedAcademicCatalog();
+        menciones = catalog.menciones.map((m) => ({
+          id: m.id,
+          code: m.code,
+          name: m.name,
+        }));
       }
 
       const restrictedMencionName = restrictedMencionId
@@ -194,7 +198,7 @@ export async function getSchoolBulletinData(
 
 /**
  * Consulta liviana para alimentar el abanico interactivo en el dashboard `/estudiante`
- * (compatible con cuentas `verified_workspace` y `provisional_cedula`).
+ * (compatible con cuentas `verified_workspace` y `provisional_cedula`) en 1 sola consulta sin SAVEPOINTs extra.
  */
 export async function getDashboardBulletinHighlights(
   profile: DashboardUserProfile,
@@ -204,7 +208,7 @@ export async function getDashboardBulletinHighlights(
     return await withUserDb(
       { authUserId: profile.authUserId, email: profile.authEmail },
       async (client) => {
-        const rows = await callNeonRpcTableSafe<AnnouncementRpcRow>(
+        const rows = await callNeonRpcTable<AnnouncementRpcRow>(
           client,
           "siga_get_school_announcements",
           {

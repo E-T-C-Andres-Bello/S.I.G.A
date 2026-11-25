@@ -747,25 +747,52 @@ export function AulaVirtualParticleHero({
     const ro = new ResizeObserver(resize);
     ro.observe(stage);
 
+    let tabVisible = document.visibilityState === "visible";
+
+    const loop = (now: number) => {
+      rafId = 0;
+      if (cancelled || !isVisible || !tabVisible) return;
+      drawFrame(now);
+      rafId = window.requestAnimationFrame(loop);
+    };
+
+    const requestRender = () => {
+      if (!cancelled && isVisible && tabVisible && rafId === 0) {
+        rafId = window.requestAnimationFrame(loop);
+      }
+    };
+
     const io = new IntersectionObserver(
       ([entry]) => {
         isVisible = Boolean(entry?.isIntersecting);
+        if (isVisible) {
+          requestRender();
+        } else if (rafId !== 0) {
+          window.cancelAnimationFrame(rafId);
+          rafId = 0;
+        }
       },
       { threshold: 0.05 }
     );
     io.observe(stage);
 
-    const loop = (now: number) => {
-      if (isVisible) {
-        drawFrame(now);
+    const onVisibility = () => {
+      tabVisible = document.visibilityState === "visible";
+      if (tabVisible) {
+        requestRender();
+      } else if (rafId !== 0) {
+        window.cancelAnimationFrame(rafId);
+        rafId = 0;
       }
-      rafId = window.requestAnimationFrame(loop);
     };
-    rafId = window.requestAnimationFrame(loop);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    requestRender();
 
     return () => {
       cancelled = true;
       window.cancelAnimationFrame(rafId);
+      document.removeEventListener("visibilitychange", onVisibility);
       ro.disconnect();
       io.disconnect();
       gl.deleteBuffer(posBuffer);

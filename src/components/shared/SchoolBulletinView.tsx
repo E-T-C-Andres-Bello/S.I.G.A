@@ -9,6 +9,7 @@ import {
   CalendarDays,
   Check,
   CheckCheck,
+  Inbox,
   MapPin,
   Megaphone,
   Pencil,
@@ -25,6 +26,7 @@ import { BulletinDetailDialog } from "@/components/cartelera/BulletinDetailDialo
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   archiveSchoolAnnouncementAction,
   confirmAnnouncementReadAction,
@@ -51,9 +53,12 @@ import {
   type SchoolAnnouncementItem,
 } from "@/lib/validators/bulletin";
 
+export type BulletinSectionTab = "por_leer" | "leidos";
+
 export interface SchoolBulletinViewProps {
   profile: DashboardUserProfile;
   initialData: SchoolBulletinData;
+  initialSection?: BulletinSectionTab;
 }
 
 function formatShortDate(iso: string): string {
@@ -70,6 +75,7 @@ function formatShortDate(iso: string): string {
 export function SchoolBulletinView({
   profile,
   initialData,
+  initialSection = "por_leer",
 }: SchoolBulletinViewProps) {
   const router = useRouter();
   const publishedInitial = React.useMemo(
@@ -78,21 +84,44 @@ export function SchoolBulletinView({
   );
   const [items, setItems] =
     React.useState<SchoolAnnouncementItem[]>(publishedInitial);
+  const [activeSection, setActiveSection] =
+    React.useState<BulletinSectionTab>(initialSection);
   const [searchText, setSearchText] = React.useState("");
   const [categoryFilter, setCategoryFilter] = React.useState<
     AnnouncementCategory | "all"
   >("all");
-  const [onlyUnread, setOnlyUnread] = React.useState(false);
   const [isOffline, setIsOffline] = React.useState(false);
   const [usingOfflineCache, setUsingOfflineCache] = React.useState(false);
 
   const [detailItem, setDetailItem] =
     React.useState<SchoolAnnouncementItem | null>(null);
   const [archivingId, setArchivingId] = React.useState<string | null>(null);
+  const confirmingIdsRef = React.useRef<Set<string>>(new Set());
 
   React.useEffect(() => {
     setItems(publishedInitial);
   }, [publishedInitial]);
+
+  React.useEffect(() => {
+    setActiveSection(initialSection);
+  }, [initialSection]);
+
+  const handleSectionChange = React.useCallback((nextValue: string) => {
+    const nextSection: BulletinSectionTab =
+      nextValue === "leidos" ? "leidos" : "por_leer";
+    setActiveSection(nextSection);
+    try {
+      const nextUrl = new URL(window.location.href);
+      if (nextSection === "leidos") {
+        nextUrl.searchParams.set("tab", "leidos");
+      } else {
+        nextUrl.searchParams.delete("tab");
+      }
+      window.history.replaceState(null, "", nextUrl.toString());
+    } catch {
+      // Ignorar si history API está restringida
+    }
+  }, []);
 
   // Caché Offline-First de los últimos 20 anuncios + sincronización al reconectar
   React.useEffect(() => {
@@ -138,20 +167,33 @@ export function SchoolBulletinView({
     []
   );
 
-  const filteredItems = React.useMemo(
-    () =>
-      searchBulletinAnnouncements(items, {
-        text: searchText,
-        category: categoryFilter,
-        onlyUnread,
-      }),
-    [items, searchText, categoryFilter, onlyUnread]
+  const unreadItems = React.useMemo(
+    () => items.filter((it) => !it.hasRead),
+    [items]
   );
 
-  const fanItems = React.useMemo(() => items.slice(0, 9), [items]);
-  const unreadTotal = React.useMemo(
-    () => items.filter((it) => !it.hasRead).length,
+  const readItems = React.useMemo(
+    () =>
+      items
+        .filter((it) => it.hasRead)
+        .sort((a, b) => {
+          const aMs = Date.parse(a.readAt ?? a.publishedAt);
+          const bMs = Date.parse(b.readAt ?? b.publishedAt);
+          return (Number.isFinite(bMs) ? bMs : 0) - (Number.isFinite(aMs) ? aMs : 0);
+        }),
     [items]
+  );
+
+  const sectionItems = activeSection === "leidos" ? readItems : unreadItems;
+
+  const filteredItems = React.useMemo(
+    () =>
+      searchBulletinAnnouncements(sectionItems, {
+        text: searchText,
+        category: categoryFilter,
+        onlyUnread: false,
+      }),
+    [sectionItems, searchText, categoryFilter]
   );
 
   const handleReadConfirmed = React.useCallback(
@@ -175,42 +217,81 @@ export function SchoolBulletinView({
   );
 
   const handleConfirmFromCard = React.useCallback(
-    async (target: SchoolAnnouncementItem) => {
+    async (
+      target: SchoolAnnouncementItem,
+      options?: { silent?: boolean }
+    ) => {
+      const silent = Boolean(options?.silent);
       if (target.hasRead) {
-        toast.info("Ya confirmaste lectura de este comunicado.");
+        if (!silent) {
+          toast.info("Este comunicado ya está guardado en tu sección de Leídos.");
+        }
         return;
       }
+
+      if (confirmingIdsRef.current.has(target.id)) return;
+      confirmingIdsRef.current.add(target.id);
 
       const optimisticReadAt = new Date().toISOString();
       handleReadConfirmed(target.id, target.readCount + 1, optimisticReadAt);
 
-      if (typeof window !== "undefined" && !window.navigator.onLine) {
-        await enqueueOfflineMutation({
-          dedupKey: `announcement_read:${target.id}`,
-          kind: "announcement_read",
-          payload: { announcementId: target.id },
-        });
-        toast.success(
-          "Confirmación guardada sin conexión. Se enviará al recuperar internet."
-        );
-        return;
-      }
+      try {
+        if (typeof window !== "undefined" && !window.navigator.onLine) {
+          await enqueueOfflineMutation({
+            dedupKey: `announcement_read:${target.id}`,
+            kind: "announcement_read",
+            payload: { announcementId: target.id },
+          });
+          toast.success(
+            "Marcado como leído sin conexión. Se sincronizará al recuperar internet."
+          );
+          return;
+        }
 
-      const res = await confirmAnnouncementReadAction(target.id);
-      if (!res.ok) {
-        await enqueueOfflineMutation({
-          dedupKey: `announcement_read:${target.id}`,
-          kind: "announcement_read",
-          payload: { announcementId: target.id },
-        }).catch(() => {});
-        toast.info("Confirmación guardada localmente para reintento automático.");
-        return;
-      }
+        const res = await confirmAnnouncementReadAction(target.id);
+        if (!res.ok) {
+          await enqueueOfflineMutation({
+            dedupKey: `announcement_read:${target.id}`,
+            kind: "announcement_read",
+            payload: { announcementId: target.id },
+          }).catch(() => {});
+          if (!silent) {
+            toast.info(
+              "Lectura guardada localmente para reintento automático."
+            );
+          }
+          return;
+        }
 
-      handleReadConfirmed(target.id, res.data.readCount, res.data.readAt);
-      toast.success("Lectura confirmada.");
+        handleReadConfirmed(target.id, res.data.readCount, res.data.readAt);
+        if (!silent) {
+          toast.success("Marcado como leído y movido a tu sección de Leídos.");
+        }
+      } finally {
+        confirmingIdsRef.current.delete(target.id);
+      }
     },
     [handleReadConfirmed]
+  );
+
+  const openDetailAndMarkRead = React.useCallback(
+    (target: SchoolAnnouncementItem) => {
+      const optimisticReadAt = target.readAt ?? new Date().toISOString();
+      setDetailItem(
+        target.hasRead
+          ? target
+          : {
+              ...target,
+              hasRead: true,
+              readCount: target.readCount + 1,
+              readAt: optimisticReadAt,
+            }
+      );
+      if (!target.hasRead) {
+        void handleConfirmFromCard(target, { silent: true });
+      }
+    },
+    [handleConfirmFromCard]
   );
 
   const handleArchive = async (item: SchoolAnnouncementItem) => {
@@ -240,9 +321,17 @@ export function SchoolBulletinView({
               <Megaphone className="size-3.5" aria-hidden="true" />
               Canal Oficial E.T.C. &ldquo;Andrés Bello&rdquo;
             </span>
-            {unreadTotal > 0 ? (
+            {unreadItems.length > 0 ? (
               <Badge variant="secondary" className="rounded-full text-[11px]">
-                {unreadTotal} por confirmar
+                {unreadItems.length} por leer
+              </Badge>
+            ) : readItems.length > 0 ? (
+              <Badge
+                variant="outline"
+                className="gap-1 rounded-full border-emerald-500/35 bg-emerald-500/12 text-[11px] text-emerald-700 dark:text-emerald-300"
+              >
+                <CheckCheck className="size-3" aria-hidden="true" />
+                Todo al día
               </Badge>
             ) : null}
             {isOffline || usingOfflineCache ? (
@@ -260,8 +349,8 @@ export function SchoolBulletinView({
             La Cartelera Bellista
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Anuncios oficiales, contingencias del plantel, eventos del patio
-            central y convocatorias por mención en un solo lugar.
+            Al abrir un comunicado se marca automáticamente como leído y se
+            guarda en tu sección de Leídos para mantener tu tablero despejado.
           </p>
         </div>
 
@@ -275,11 +364,37 @@ export function SchoolBulletinView({
         ) : null}
       </header>
 
-      {/* Abanico interactivo destacado */}
-      {fanItems.length > 0 ? (
+      {/* Selector de sección: Por leer vs Leídos */}
+      <Tabs
+        value={activeSection}
+        onValueChange={handleSectionChange}
+        className="w-full"
+      >
+        <TabsList className="siga-glass-surface h-auto w-fit gap-1 rounded-2xl border p-1.5">
+          <TabsTrigger
+            value="por_leer"
+            className="cursor-pointer rounded-xl px-4 py-2 text-xs font-medium"
+          >
+            <Inbox className="mr-1.5 size-3.5" aria-hidden="true" />
+            <span>Por leer ({unreadItems.length})</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="leidos"
+            className="cursor-pointer rounded-xl px-4 py-2 text-xs font-medium"
+          >
+            <CheckCheck className="mr-1.5 size-3.5" aria-hidden="true" />
+            <span>Leídos ({readItems.length})</span>
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {/* Abanico interactivo solo en la pestaña Por leer (oculta los ya leídos) */}
+      {activeSection === "por_leer" && items.length > 0 ? (
         <BellistaBulletinCardFan
-          items={fanItems}
+          items={items}
           variant="full"
+          hideRead
+          onOpenReadArchive={() => handleSectionChange("leidos")}
           canEditItem={canEditAnnouncement}
           onEditItem={(item) => {
             router.push(`/cartelera/gestion?edit=${item.id}`);
@@ -293,32 +408,23 @@ export function SchoolBulletinView({
         aria-label="Filtros y buscador de comunicados"
         className="siga-glass-surface flex flex-col gap-3.5 rounded-[24px] border p-4 sm:p-5"
       >
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative flex-1">
-            <Search
-              className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <Input
-              type="search"
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              placeholder="Buscar avisos, eventos, fechas, menciones o lugares..."
-              aria-label="Buscar en La Cartelera Bellista"
-              className="h-10 rounded-full pl-10"
-            />
-          </div>
-
-          <Button
-            type="button"
-            variant={onlyUnread ? "default" : "outline"}
-            size="sm"
-            onClick={() => setOnlyUnread((prev) => !prev)}
-            className="h-10 shrink-0 rounded-full px-4"
-          >
-            <Check className="mr-1.5 size-3.5" aria-hidden="true" />
-            <span>Solo sin confirmar ({unreadTotal})</span>
-          </Button>
+        <div className="relative flex-1">
+          <Search
+            className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <Input
+            type="search"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            placeholder={
+              activeSection === "leidos"
+                ? "Buscar en tus comunicados leídos..."
+                : "Buscar avisos pendientes, eventos, fechas o lugares..."
+            }
+            aria-label="Buscar en La Cartelera Bellista"
+            className="h-10 rounded-full pl-10"
+          />
         </div>
 
         <div
@@ -337,12 +443,12 @@ export function SchoolBulletinView({
                 : "border-border/70 bg-background/60 text-muted-foreground hover:text-foreground"
             )}
           >
-            Todos ({items.length})
+            Todos ({sectionItems.length})
           </button>
 
           {ANNOUNCEMENT_CATEGORIES.map((cat) => {
             const meta = ANNOUNCEMENT_CATEGORY_META[cat];
-            const count = items.filter((it) => it.category === cat).length;
+            const count = sectionItems.filter((it) => it.category === cat).length;
             const active = categoryFilter === cat;
             return (
               <button
@@ -364,23 +470,42 @@ export function SchoolBulletinView({
         </div>
       </section>
 
-      {/* Feed de comunicados */}
+      {/* Feed de comunicados de la sección activa */}
       {filteredItems.length === 0 ? (
         <section className="siga-glass-surface flex flex-col items-center justify-center rounded-[28px] border border-dashed px-6 py-14 text-center">
-          <span className="siga-glass-inner flex size-14 items-center justify-center rounded-2xl border text-primary dark:text-[#7dd3fc]">
-            <Megaphone className="size-6" aria-hidden="true" />
+          <span
+            className={cn(
+              "siga-glass-inner flex size-14 items-center justify-center rounded-2xl border",
+              activeSection === "por_leer" && readItems.length > 0
+                ? "text-emerald-600 dark:text-emerald-400"
+                : "text-primary dark:text-[#7dd3fc]"
+            )}
+          >
+            {activeSection === "por_leer" && readItems.length > 0 ? (
+              <CheckCheck className="size-6" aria-hidden="true" />
+            ) : (
+              <Megaphone className="size-6" aria-hidden="true" />
+            )}
           </span>
           <h2 className="mt-4 text-base font-semibold text-foreground">
-            {items.length === 0
-              ? "Todavía no hay comunicados publicados"
+            {sectionItems.length === 0
+              ? activeSection === "leidos"
+                ? "Aún no tienes comunicados leídos"
+                : readItems.length > 0
+                  ? "¡No tienes comunicados pendientes por leer!"
+                  : "Todavía no hay comunicados publicados"
               : "Ningún comunicado coincide con tu búsqueda"}
           </h2>
           <p className="mt-1.5 max-w-md text-xs leading-relaxed text-muted-foreground">
-            {items.length === 0
-              ? "Cuando Dirección, Control de Estudios o Coordinación de Mención publiquen anuncios oficiales, aparecerán aquí y en el inicio."
+            {sectionItems.length === 0
+              ? activeSection === "leidos"
+                ? "Cada vez que abras una noticia desde el inicio o desde Por leer, se guardará automáticamente aquí para consulta futura."
+                : readItems.length > 0
+                  ? `Tus ${readItems.length} comunicados ya leídos se mantienen ordenados en la sección de Leídos.`
+                  : "Cuando Dirección, Control de Estudios o Coordinación de Mención publiquen anuncios oficiales, aparecerán aquí y en el inicio."
               : "Prueba limpiar los filtros o buscar con otras palabras clave."}
           </p>
-          {items.length > 0 ? (
+          {sectionItems.length > 0 ? (
             <Button
               type="button"
               variant="outline"
@@ -389,10 +514,30 @@ export function SchoolBulletinView({
               onClick={() => {
                 setSearchText("");
                 setCategoryFilter("all");
-                setOnlyUnread(false);
               }}
             >
               Limpiar filtros
+            </Button>
+          ) : activeSection === "por_leer" && readItems.length > 0 ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-4 rounded-full"
+              onClick={() => handleSectionChange("leidos")}
+            >
+              <CheckCheck className="mr-1.5 size-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+              Ir a Leídos ({readItems.length})
+            </Button>
+          ) : activeSection === "leidos" && unreadItems.length > 0 ? (
+            <Button
+              type="button"
+              size="sm"
+              className="mt-4 rounded-full"
+              onClick={() => handleSectionChange("por_leer")}
+            >
+              <Inbox className="mr-1.5 size-4" aria-hidden="true" />
+              Ver comunicados por leer ({unreadItems.length})
             </Button>
           ) : initialData.canPublish ? (
             <Button size="sm" className="mt-4 rounded-full" asChild>
@@ -405,7 +550,11 @@ export function SchoolBulletinView({
         </section>
       ) : (
         <section
-          aria-label="Lista de comunicados oficiales"
+          aria-label={
+            activeSection === "leidos"
+              ? "Comunicados leídos"
+              : "Comunicados pendientes por leer"
+          }
           className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3"
         >
           {filteredItems.map((item) => {
@@ -421,7 +570,7 @@ export function SchoolBulletinView({
                 {/* Portada o cabecera cromática */}
                 <button
                   type="button"
-                  onClick={() => setDetailItem(item)}
+                  onClick={() => openDetailAndMarkRead(item)}
                   className="relative h-40 w-full cursor-pointer overflow-hidden text-left focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
                   style={{
                     background: `linear-gradient(135deg, ${item.themePalette.primary}, ${item.themePalette.secondary})`,
@@ -490,7 +639,7 @@ export function SchoolBulletinView({
                   <div>
                     <button
                       type="button"
-                      onClick={() => setDetailItem(item)}
+                      onClick={() => openDetailAndMarkRead(item)}
                       className="cursor-pointer text-left text-[15px] leading-snug font-semibold text-foreground transition-colors hover:text-primary focus-visible:underline focus-visible:outline-none"
                     >
                       {item.title}
@@ -522,7 +671,9 @@ export function SchoolBulletinView({
 
                   <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-3">
                     <span className="text-[11px] text-muted-foreground">
-                      {formatShortDate(item.publishedAt)}
+                      {item.hasRead && item.readAt
+                        ? `Leído el ${formatShortDate(item.readAt)}`
+                        : formatShortDate(item.publishedAt)}
                     </span>
 
                     <div className="flex items-center gap-1.5">
@@ -553,41 +704,36 @@ export function SchoolBulletinView({
                         </>
                       ) : null}
 
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={item.hasRead ? "secondary" : "outline"}
-                        className="h-8 rounded-full px-3 text-xs"
-                        onClick={() => handleConfirmFromCard(item)}
-                        style={
-                          item.hasRead
-                            ? {
-                                background: hexToRgba(
-                                  item.themePalette.primary,
-                                  0.16
-                                ),
-                                color: item.themePalette.primary,
-                                borderColor: hexToRgba(
-                                  item.themePalette.primary,
-                                  0.32
-                                ),
-                              }
-                            : undefined
-                        }
-                      >
-                        {item.hasRead ? (
-                          <CheckCheck
-                            className="mr-1 size-3.5"
-                            aria-hidden="true"
-                          />
-                        ) : (
-                          <Check
-                            className="mr-1 size-3.5"
-                            aria-hidden="true"
-                          />
-                        )}
-                        <span>Enterado · {item.readCount}</span>
-                      </Button>
+                      {item.hasRead ? (
+                        <span
+                          className="inline-flex h-8 items-center gap-1 rounded-full border px-3 text-xs font-medium"
+                          style={{
+                            background: hexToRgba(
+                              item.themePalette.primary,
+                              0.14
+                            ),
+                            color: item.themePalette.primary,
+                            borderColor: hexToRgba(
+                              item.themePalette.primary,
+                              0.32
+                            ),
+                          }}
+                        >
+                          <CheckCheck className="size-3.5" aria-hidden="true" />
+                          <span>Leído · {item.readCount}</span>
+                        </span>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 rounded-full px-3 text-xs"
+                          onClick={() => handleConfirmFromCard(item)}
+                        >
+                          <Check className="mr-1 size-3.5" aria-hidden="true" />
+                          <span>Marcar leído</span>
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -608,7 +754,7 @@ export function SchoolBulletinView({
           setDetailItem(null);
           router.push(`/cartelera/gestion?edit=${it.id}`);
         }}
-        onConfirmRead={handleConfirmFromCard}
+        onConfirmRead={(it) => handleConfirmFromCard(it)}
       />
     </div>
   );

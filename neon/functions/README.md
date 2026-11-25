@@ -8,13 +8,17 @@ Esta carpeta aloja las funciones serverless en **Node.js 24** gestionadas por **
 | :--- | :--- | :--- |
 | **`studentreqmail`** | `neon/functions/workflow-student-request-email/index.ts` | Automatización 01: al crearse un trámite en `public.student_requests`, registra la notificación in-app, despacha acuse al estudiante y alerta a Control de Estudios vía **n8n → Mailtrap** y actualiza `workflows.workflow_runs`. |
 | **`bulletinai`** | `neon/functions/workflow-bulletin-ai-assistant/index.ts` | Automatización 02: valida el ticket de cuota editorial (`bulletin_ai_usage_logs`), desidentifica PII y conecta el Asistente IA de `/cartelera/gestion` con el webhook de **n8n** devolviendo sugerencias sanitizadas. |
+| **`bulletinnotify`** | `neon/functions/workflow-bulletin-publish-email/index.ts` | Automatización 03: al publicarse un comunicado en `public.school_announcements`, filtra en Neon PostgreSQL si aplica a toda la institución o a una mención/año específico y despacha correos vía **n8n → Mailtrap** desde `notificaciones@etcandresbello.org`, auditando cada envío en `public.notification_email_logs`. |
+| **`portfoliocoach`** | `neon/functions/workflow-portfolio-ai-coach/index.ts` | Automatización 04: verifica tickets de cuota (`portfolio_ai_usage_logs`), desidentifica PII y conecta el Coach Socrático e importador de CV en PDF del Módulo 1.14 con el Workflow 04 de **n8n**. |
 
 > **Nota:** La antigua función `neon-analytics-query` fue retirada porque Next.js consulta directamente a Neon PostgreSQL mediante la función RLS `siga_get_analytics_bi_overview`.
 
 ## Variables opcionales (configuradas vía `.env.local` al desplegar)
 
 - `WORKFLOW_WEBHOOK_SECRET` — Secreto compartido en header `x-siga-workflow-secret` (en desarrollo sin este valor se exige el `workflow_run_id` válido emitido por PostgreSQL).
-- `N8N_WEBHOOK_URL_STUDENT_REQUEST` — URL del webhook de n8n (ver [`n8n/workflows/README.md`](../../n8n/workflows/README.md)).
+- `N8N_WEBHOOK_URL_STUDENT_REQUEST` — URL del webhook de n8n para trámites (ver [`n8n/workflows/README.md`](../../n8n/workflows/README.md)).
+- `N8N_WEBHOOK_URL_BULLETIN_AI` — URL del webhook de n8n para el Asistente IA editorial.
+- `N8N_WEBHOOK_URL_BULLETIN_PUBLISH` — URL del webhook de n8n para notificaciones de publicación en cartelera (`/webhook/siga-cartelera-mailtrap`).
 - `N8N_WEBHOOK_SECRET` — Header secreto `x-siga-n8n-secret` hacia n8n.
 - `CONTROL_ESTUDIOS_NOTIFY_EMAIL` — Correo adicional opcional para alertas de secretaría.
 - `SIGA_PORTAL_BASE_URL` — URL pública del portal usada en los enlaces del correo (por defecto `http://localhost:3000`).

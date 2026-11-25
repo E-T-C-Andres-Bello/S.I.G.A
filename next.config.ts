@@ -8,6 +8,18 @@ const nextConfig: NextConfig = {
   images: {
     formats: ["image/avif", "image/webp"],
   },
+  experimental: {
+    staleTimes: {
+      dynamic: 30,
+      static: 180,
+    },
+    optimizePackageImports: [
+      "lucide-react",
+      "radix-ui",
+      "motion",
+      "@sentry/nextjs",
+    ],
+  },
 };
 
 export default withSentryConfig(nextConfig, {

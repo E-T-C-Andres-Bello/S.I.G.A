@@ -69,13 +69,12 @@ export function getNeonPool(): Pool {
     connectionString: normalizedConnectionString,
     ssl: isLocal ? false : { rejectUnauthorized: true },
     max: 10,
-    idleTimeoutMillis: 20_000,
+    idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
+    keepAlive: true,
   });
 
-  if (process.env.NODE_ENV !== "production") {
-    globalThis.__sigaNeonPool = pool;
-  }
+  globalThis.__sigaNeonPool = pool;
 
   return pool;
 }
@@ -89,23 +88,35 @@ async function runInRoleTransaction<T>(
   const client = await pool.connect();
 
   try {
-    await client.query("BEGIN");
-    // Roles literales fijos (nunca interpolar entrada de usuario en SET LOCAL ROLE)
-    if (role === "authenticated") {
-      await client.query("SET LOCAL ROLE authenticated");
-    } else if (role === "anon") {
-      await client.query("SET LOCAL ROLE anon");
+    // Roles literales fijos (nunca interpolar entrada de usuario en SET LOCAL ROLE).
+    // Se agrupan sentencias sin parámetros con el protocolo simple de PostgreSQL
+    // para ahorrar viajes de red (TCP round-trips) hacia Neon en cada transacción.
+    const hasCustomClaims = Object.keys(claims).length > 0;
+    if (!hasCustomClaims && role === "service_role") {
+      await client.query(
+        "BEGIN; SET LOCAL ROLE service_role; SELECT set_config('request.jwt.claim.role', 'service_role', true), set_config('request.jwt.claim.sub', '', true), set_config('request.jwt.claims', '{\"role\":\"service_role\"}', true)"
+      );
+    } else if (!hasCustomClaims && role === "anon") {
+      await client.query(
+        "BEGIN; SET LOCAL ROLE anon; SELECT set_config('request.jwt.claim.role', 'anon', true), set_config('request.jwt.claim.sub', '', true), set_config('request.jwt.claims', '{\"role\":\"anon\"}', true)"
+      );
     } else {
-      await client.query("SET LOCAL ROLE service_role");
-    }
+      if (role === "authenticated") {
+        await client.query("BEGIN; SET LOCAL ROLE authenticated");
+      } else if (role === "anon") {
+        await client.query("BEGIN; SET LOCAL ROLE anon");
+      } else {
+        await client.query("BEGIN; SET LOCAL ROLE service_role");
+      }
 
-    await client.query(
-      `SELECT
-         set_config('request.jwt.claim.role', $1, true),
-         set_config('request.jwt.claim.sub', $2, true),
-         set_config('request.jwt.claims', $3, true)`,
-      [role, claims.sub ?? "", JSON.stringify({ role, ...claims })]
-    );
+      await client.query(
+        `SELECT
+           set_config('request.jwt.claim.role', $1, true),
+           set_config('request.jwt.claim.sub', $2, true),
+           set_config('request.jwt.claims', $3, true)`,
+        [role, claims.sub ?? "", JSON.stringify({ role, ...claims })]
+      );
+    }
 
     const result = await fn(client);
     await client.query("COMMIT");

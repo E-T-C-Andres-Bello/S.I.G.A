@@ -88,3 +88,55 @@ Editor en /cartelera/gestion
 3. Confirma las credenciales de **`DeepSeek Chat Model`** y **`DeepSeek AutoFix Model`** (vienen listos con **Gateway credits** de n8n Cloud, o puedes cambiarlos a tu propia credencial `DeepSeek API`).
 4. Prueba el flujo, actívalo (**Publish / Active**), copia su **Production Webhook URL** en `N8N_WEBHOOK_URL_BULLETIN_AI` dentro de `.env.local` y despliega la función con `neon deploy --env .env.local`.
 5. Configura `NEON_FUNCTION_BULLETINAI_URL` y `WORKFLOW_WEBHOOK_SECRET` en las variables privadas de servidor de Next.js / Cloudflare.
+
+---
+
+## Automatización 03 · Publicación de Comunicado en Cartelera → Mailtrap
+
+- **Archivo:** [`03-cartelera-publicacion-mailtrap.json`](./03-cartelera-publicacion-mailtrap.json)
+- **Remitente institucional:** `notificaciones@etcandresbello.org`
+- **Flujo completo de extremo a extremo:**
+
+```text
+Editor publica comunicado en /cartelera/gestion (`upsertSchoolAnnouncementAction`)
+  └─▶ Neon Function `bulletinnotify` (cabecera `x-siga-workflow-secret`)
+        ├─ Reclama ejecución idempotente en `workflows.workflow_runs` (`bulletin_publish_mailtrap`)
+        ├─ Lee `public.school_announcements` en Neon PostgreSQL y determina alcance:
+        │     ├─ `audience_scope = "institution"` → usuarios activos de toda la institución
+        │     └─ `audience_scope = "mention"` → estudiantes matriculados en la mención/año y su coordinación
+        ├─ Genera plantilla HTML institucional segura con los colores del comunicado
+        └─▶ Webhook n8n (`POST /webhook/siga-cartelera-mailtrap` con Header Auth `x-siga-n8n-secret`)
+              ├─ Validar Payload Cartelera (Set IIFE) → ¿Payload Válido?
+              │     └─ (No) → Responder 400 Validación (`validation_error`)
+              └─ (Sí) → Filtrar Alcance (Institución vs Mención)
+                    ├─ (Toda la institución) → Split Out → Mailtrap · Toda la Institución (`notificaciones@etcandresbello.org`)
+                    └─ (Mención única)       → Split Out → Mailtrap · Mención Única (`notificaciones@etcandresbello.org`)
+                          ├─ (Éxito) → Responder 200 Enviado (`executeOnce: true` → `{ ok, sent_count, message_ids }`)
+                          └─ (Error) → Responder 502 Error Mailtrap (`executeOnce: true` → error sanitizado)
+                                └─▶ Neon Function audita en `public.notification_email_logs` y cierra `workflows.workflow_runs`
+```
+
+### Cómo conectarlo en n8n
+1. El workflow **`S.I.G.A. — Automatización 03: Publicación Cartelera -> Mailtrap`** (plantilla sin secretos en [`03-cartelera-publicacion-mailtrap.json`](./03-cartelera-publicacion-mailtrap.json)) usa **0 nodos Code** y **0 referencias a `$env`**.
+2. Confirma en el nodo **`Webhook (Publicación Cartelera)`** la credencial nativa **`Header Auth` (`httpHeaderAuth`)** con cabecera `x-siga-n8n-secret`.
+3. Confirma en **`Mailtrap · Toda la Institución`** y **`Mailtrap · Mención Única`** la credencial **`Mailtrap Token account` (`MailtrapTokenApi`)** y el remitente verificado `notificaciones@etcandresbello.org`.
+4. Activa (**Publish / Active**) el workflow, configura `N8N_WEBHOOK_URL_BULLETIN_PUBLISH` con la **Production Webhook URL** (`/webhook/siga-cartelera-mailtrap`) en `.env.local` y despliega con `npx neon deploy --env .env.local`.
+
+---
+
+## Automatización 04 · Coach IA Socrático de Portafolio y CV + Importador PDF
+
+- **Archivo:** [`04-portafolio-coach-ia.json`](./04-portafolio-coach-ia.json)
+- **Flujo seguro extremo a extremo (OWASP LLM 2025):**
+
+```text
+Estudiante en /estudiante/portafolio
+  └─▶ Next.js POST /api/estudiante/portafolio/ai-coach (Better Auth + cuota 20/h en Neon + redacción PII)
+        └─▶ Neon Function `portfoliocoach` (x-siga-workflow-secret + verificación de ticket)
+              └─▶ Webhook n8n (`POST /webhook/siga-portafolio-ia` con Header Auth `x-siga-n8n-secret`)
+                    ├─ Validar Solicitud Portafolio (Set IIFE <1 ms) → ¿Solicitud Válida? (400)
+                    └─ Coach IA Portafolio y CV (`deepseek-v4.1-flash-1017` vía Gateway credits)
+                          ├─ Modo `coach`: guía pedagógica con 1–2 preguntas concretas y propuesta opcional
+                          ├─ Modo `import_pdf`: estructura texto extraído en navegador a campos editables
+                          └─ Responder 200 / 5xx sanitizado (cero logs de éxito con texto estudiantil)
+```

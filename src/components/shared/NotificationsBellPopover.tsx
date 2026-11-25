@@ -69,10 +69,21 @@ export function NotificationsBellPopover({
     busyAll,
     markAsRead,
     markAllAsRead,
+    ensureLoaded,
   } = useNotifications();
 
   const [open, setOpen] = React.useState(false);
   const [filterMode, setFilterMode] = React.useState<"all" | "unread">("all");
+
+  const handleOpenChange = React.useCallback(
+    (nextOpen: boolean) => {
+      setOpen(nextOpen);
+      if (nextOpen) {
+        ensureLoaded();
+      }
+    },
+    [ensureLoaded]
+  );
 
   const visibleItems = React.useMemo(() => {
     const base =
@@ -96,7 +107,7 @@ export function NotificationsBellPopover({
   };
 
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
+    <Popover.Root open={open} onOpenChange={handleOpenChange}>
       <Popover.Trigger asChild>
         {trigger ?? (
           <button

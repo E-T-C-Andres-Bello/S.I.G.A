@@ -24,7 +24,6 @@ import { toast } from "sonner";
 import { cn } from "cn";
 import { CountUp } from "@/components/dashboard/SigaAnalyticsBento";
 import { ROLE_LABELS } from "@/components/dashboard/DashboardSidebar";
-import { downloadCdceReportPdf } from "@/components/pdf/CdceReportPdfDocument";
 import {
   exportCdceMatrixCsv,
   exportFilterSubjectsCsv,
@@ -200,6 +199,9 @@ export function AnaliticaDashboardView({
     if (!data || exportingPdf) return;
     setExportingPdf(true);
     try {
+      const { downloadCdceReportPdf } = await import(
+        "@/components/pdf/CdceReportPdfDocument"
+      );
       await downloadCdceReportPdf(data, filteredCdce);
       toast.success("Reporte estadístico CDCE descargado en PDF.");
     } catch {

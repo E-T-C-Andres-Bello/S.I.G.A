@@ -1,5 +1,7 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { BellistaBulletinCardFan } from "@/components/cartelera/BellistaBulletinCardFan";
 import {
   StudentDashboardView,
   type StudentPortalTab,
@@ -9,7 +11,10 @@ import { getDashboardBulletinHighlights } from "@/features/cartelera/announcemen
 import { getStudentDashboardData } from "@/features/estudiante/dashboard-data";
 import { getProvisionalStudentOnboardingData } from "@/features/estudiante/provisional-data";
 import { generateStudentCarnetTokenAction } from "@/features/estudiante/student-actions";
-import { getAuthenticatedDashboardContext } from "@/lib/auth/dashboard-session";
+import {
+  getAuthenticatedDashboardContext,
+  type DashboardUserProfile,
+} from "@/lib/auth/dashboard-session";
 
 export const metadata: Metadata = {
   title: 'Inicio Estudiante · S.I.G.A. — E.T.C. "Andrés Bello"',
@@ -55,6 +60,16 @@ const VALID_TABS = new Set<StudentPortalTab>([
   "carnet",
 ]);
 
+async function StreamedDashboardBulletin({
+  profile,
+}: {
+  profile: DashboardUserProfile;
+}) {
+  const highlights = await getDashboardBulletinHighlights(profile, 25);
+  if (highlights.length === 0) return null;
+  return <BellistaBulletinCardFan items={highlights} variant="dashboard" />;
+}
+
 export default async function EstudianteHomePage({
   searchParams,
 }: EstudianteHomePageProps) {
@@ -66,7 +81,7 @@ export default async function EstudianteHomePage({
   if (profile.accessTier === "provisional_cedula") {
     const [onboarding, bulletinHighlights] = await Promise.all([
       getProvisionalStudentOnboardingData(profile.internalUserId),
-      getDashboardBulletinHighlights(profile, 9),
+      getDashboardBulletinHighlights(profile, 25),
     ]);
     return (
       <ProvisionalStudentOnboardingView
@@ -92,21 +107,26 @@ export default async function EstudianteHomePage({
       ? (params.tab as StudentPortalTab)
       : "resumen";
 
-  const [{ todayIso, greeting }, dashboardData, bulletinHighlights, carnetResult] =
-    await Promise.all([
-      Promise.resolve(getCaracasTimeContext()),
-      getStudentDashboardData(profile.internalUserId, profile.accessTier),
-      getDashboardBulletinHighlights(profile, 9),
-      initialTab === "carnet"
-        ? generateStudentCarnetTokenAction(120)
-        : Promise.resolve(null),
-    ]);
+  const { todayIso, greeting } = getCaracasTimeContext();
+  const [dashboardData, carnetResult] = await Promise.all([
+    getStudentDashboardData(profile.internalUserId, profile.accessTier, {
+      authUserId: profile.authUserId,
+      email: profile.authEmail,
+    }),
+    initialTab === "carnet"
+      ? generateStudentCarnetTokenAction(120)
+      : Promise.resolve(null),
+  ]);
 
   return (
     <StudentDashboardView
       profile={profile}
       data={dashboardData}
-      bulletinHighlights={bulletinHighlights}
+      bulletinSlot={
+        <Suspense fallback={null}>
+          <StreamedDashboardBulletin profile={profile} />
+        </Suspense>
+      }
       initialCarnetToken={carnetResult && carnetResult.ok ? carnetResult.data : null}
       initialCarnetError={
         carnetResult && !carnetResult.ok ? carnetResult.message : null

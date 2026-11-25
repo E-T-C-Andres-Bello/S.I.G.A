@@ -35,6 +35,10 @@ export interface BellistaBulletinCardFanProps {
   variant?: "dashboard" | "full";
   autoplay?: boolean;
   interval?: number;
+  /** Cuando está activo (por defecto), el abanico muestra únicamente comunicados sin leer. */
+  hideRead?: boolean;
+  /** Acción opcional en vista completa para abrir directamente la pestaña de Leídos. */
+  onOpenReadArchive?: () => void;
   canEditItem?: (item: SchoolAnnouncementItem) => boolean;
   onEditItem?: (item: SchoolAnnouncementItem) => void;
   onItemReadConfirmed?: (
@@ -336,6 +340,8 @@ export function BellistaBulletinCardFan({
   variant = "dashboard",
   autoplay = true,
   interval = 4200,
+  hideRead = true,
+  onOpenReadArchive,
   canEditItem,
   onEditItem,
   onItemReadConfirmed,
@@ -348,7 +354,19 @@ export function BellistaBulletinCardFan({
     setLocalItems(items);
   }, [items]);
 
-  const n = localItems.length;
+  const visibleItems = React.useMemo(
+    () =>
+      (hideRead ? localItems.filter((it) => !it.hasRead) : localItems).slice(
+        0,
+        9
+      ),
+    [hideRead, localItems]
+  );
+  const readCountTotal = React.useMemo(
+    () => localItems.filter((it) => it.hasRead).length,
+    [localItems]
+  );
+  const n = visibleItems.length;
   const stageRef = React.useRef<HTMLDivElement | null>(null);
   const cardRefs = React.useRef<(HTMLDivElement | null)[]>([]);
   const [active, setActive] = React.useState(0);
@@ -358,7 +376,7 @@ export function BellistaBulletinCardFan({
     null
   );
   const [bursts, setBursts] = React.useState<number[]>([]);
-  const confirmLockRef = React.useRef(false);
+  const confirmingIdsRef = React.useRef<Set<string>>(new Set());
 
   const sim = React.useRef({
     pos: 0,
@@ -582,16 +600,6 @@ export function BellistaBulletinCardFan({
     s.vel = s.dragV * 0.6;
   };
 
-  const handleCardClick = (i: number) => {
-    if (sim.current.moved > 6) return;
-    if (i === active) {
-      const targetItem = localItems[i];
-      if (targetItem) setDetailItem(targetItem);
-      return;
-    }
-    goTo(i);
-  };
-
   const tilt = (e: React.PointerEvent, i: number) => {
     if (i !== active || sim.current.dragging) return;
     const el = e.currentTarget as HTMLElement;
@@ -612,7 +620,7 @@ export function BellistaBulletinCardFan({
     el.style.setProperty("--sh", "0");
   };
 
-  const activeItem = localItems[active] ?? localItems[0] ?? null;
+  const activeItem = visibleItems[active] ?? visibleItems[0] ?? null;
 
   const triggerBurst = React.useCallback(() => {
     const id = Date.now() + Math.random();
@@ -623,16 +631,22 @@ export function BellistaBulletinCardFan({
   }, []);
 
   const handleConfirmRead = React.useCallback(
-    async (target: SchoolAnnouncementItem) => {
+    async (
+      target: SchoolAnnouncementItem,
+      options?: { silent?: boolean }
+    ) => {
+      const silent = Boolean(options?.silent);
       if (target.hasRead) {
-        triggerBurst();
-        toast.info("Ya confirmaste lectura de este comunicado.");
+        if (!silent) {
+          triggerBurst();
+          toast.info("Este comunicado ya está guardado en tu sección de Leídos.");
+        }
         return;
       }
 
-      if (confirmLockRef.current) return;
-      confirmLockRef.current = true;
-      triggerBurst();
+      if (confirmingIdsRef.current.has(target.id)) return;
+      confirmingIdsRef.current.add(target.id);
+      if (!silent) triggerBurst();
 
       const optimisticReadAt = new Date().toISOString();
       const optimisticCount = target.readCount + 1;
@@ -663,7 +677,7 @@ export function BellistaBulletinCardFan({
             payload: { announcementId: target.id },
           });
           toast.success(
-            "Confirmación guardada sin conexión. Se sincronizará automáticamente al volver internet."
+            "Marcado como leído sin conexión. Se sincronizará al volver internet."
           );
           return;
         }
@@ -675,52 +689,143 @@ export function BellistaBulletinCardFan({
             kind: "announcement_read",
             payload: { announcementId: target.id },
           }).catch(() => {});
-          toast.info("Confirmación guardada localmente para reintento automático.");
+          if (!silent) {
+            toast.info(
+              "Lectura guardada localmente para reintento automático."
+            );
+          }
           return;
         }
 
         applyState(res.data.readCount, res.data.readAt);
-        toast.success("Lectura confirmada en La Cartelera Bellista.");
+        if (!silent) {
+          toast.success("Marcado como leído y movido a tu sección de Leídos.");
+        }
       } finally {
-        confirmLockRef.current = false;
+        confirmingIdsRef.current.delete(target.id);
       }
     },
     [onItemReadConfirmed, triggerBurst]
   );
 
+  const openDetailAndMarkRead = React.useCallback(
+    (targetItem: SchoolAnnouncementItem) => {
+      const optimisticReadAt = targetItem.readAt ?? new Date().toISOString();
+      const previewItem = targetItem.hasRead
+        ? targetItem
+        : {
+            ...targetItem,
+            hasRead: true,
+            readCount: targetItem.readCount + 1,
+            readAt: optimisticReadAt,
+          };
+      setDetailItem(previewItem);
+      if (!targetItem.hasRead) {
+        void handleConfirmRead(targetItem, { silent: true });
+      }
+    },
+    [handleConfirmRead]
+  );
+
+  const handleCardClick = (i: number) => {
+    if (sim.current.moved > 6) return;
+    if (i === active) {
+      const targetItem = visibleItems[i];
+      if (targetItem) openDetailAndMarkRead(targetItem);
+      return;
+    }
+    goTo(i);
+  };
+
+  const detailDialog = (
+    <BulletinDetailDialog
+      item={detailItem}
+      open={detailItem !== null}
+      onOpenChange={(open) => {
+        if (!open) setDetailItem(null);
+      }}
+      showFullBulletinLink={variant === "dashboard"}
+      canEdit={Boolean(detailItem && canEditItem?.(detailItem))}
+      onEdit={(it) => {
+        setDetailItem(null);
+        onEditItem?.(it);
+      }}
+      onConfirmRead={(it) => handleConfirmRead(it)}
+    />
+  );
+
   if (n === 0 || !activeItem) {
+    const allCaughtUp = hideRead && readCountTotal > 0;
     return (
-      <section
-        aria-label="La Cartelera Bellista"
-        className={cn(
-          "siga-glass-surface flex flex-col items-start justify-between gap-4 rounded-[28px] border p-5 sm:flex-row sm:items-center sm:p-6",
-          className
-        )}
-      >
-        <div className="flex items-center gap-3.5">
-          <span className="siga-glass-inner flex size-11 shrink-0 items-center justify-center rounded-2xl border text-primary dark:text-[#7dd3fc]">
-            <Megaphone className="size-5" aria-hidden="true" />
-          </span>
-          <div>
-            <h3 className="text-sm font-semibold text-foreground">
-              La Cartelera Bellista
-            </h3>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Aún no hay anuncios publicados para tu sección. Cuando Dirección o
-              tu coordinación publiquen un comunicado aparecerá aquí.
-            </p>
+      <>
+        <section
+          aria-label="La Cartelera Bellista"
+          className={cn(
+            "siga-glass-surface flex flex-col items-start justify-between gap-4 rounded-[28px] border p-5 sm:flex-row sm:items-center sm:p-6",
+            className
+          )}
+        >
+          <div className="flex items-center gap-3.5">
+            <span
+              className={cn(
+                "siga-glass-inner flex size-11 shrink-0 items-center justify-center rounded-2xl border",
+                allCaughtUp
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : "text-primary dark:text-[#7dd3fc]"
+              )}
+            >
+              {allCaughtUp ? (
+                <CheckCheck className="size-5" aria-hidden="true" />
+              ) : (
+                <Megaphone className="size-5" aria-hidden="true" />
+              )}
+            </span>
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">
+                {allCaughtUp
+                  ? "Estás al día con La Cartelera Bellista"
+                  : "La Cartelera Bellista"}
+              </h3>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {allCaughtUp
+                  ? `Ya leíste ${readCountTotal} ${readCountTotal === 1 ? "comunicado reciente" : "comunicados recientes"}. Todos quedan guardados en tu sección de Leídos.`
+                  : "Aún no hay anuncios publicados para tu sección. Cuando Dirección o tu coordinación publiquen un comunicado aparecerá aquí."}
+              </p>
+            </div>
           </div>
-        </div>
-        {variant === "dashboard" ? (
-          <Link
-            href="/estudiante/cartelera"
-            className="siga-glass-inner inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-4 text-xs font-medium text-foreground transition-colors hover:bg-primary/10"
-          >
-            <span>Abrir Cartelera</span>
-            <ArrowUpRight className="size-3.5" aria-hidden="true" />
-          </Link>
-        ) : null}
-      </section>
+
+          {allCaughtUp ? (
+            onOpenReadArchive ? (
+              <button
+                type="button"
+                onClick={onOpenReadArchive}
+                className="siga-glass-inner inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-4 text-xs font-medium text-foreground transition-colors hover:bg-primary/10"
+              >
+                <CheckCheck className="size-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                <span>Ver leídos ({readCountTotal})</span>
+              </button>
+            ) : (
+              <Link
+                href="/estudiante/cartelera?tab=leidos"
+                className="siga-glass-inner inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-4 text-xs font-medium text-foreground transition-colors hover:bg-primary/10"
+              >
+                <CheckCheck className="size-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                <span>Ver leídos ({readCountTotal})</span>
+                <ArrowUpRight className="size-3.5" aria-hidden="true" />
+              </Link>
+            )
+          ) : variant === "dashboard" ? (
+            <Link
+              href="/estudiante/cartelera"
+              className="siga-glass-inner inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-4 text-xs font-medium text-foreground transition-colors hover:bg-primary/10"
+            >
+              <span>Abrir Cartelera</span>
+              <ArrowUpRight className="size-3.5" aria-hidden="true" />
+            </Link>
+          ) : null}
+        </section>
+        {detailDialog}
+      </>
     );
   }
 
@@ -778,7 +883,7 @@ export function BellistaBulletinCardFan({
           } else if (e.key === "Enter" || e.key === " ") {
             if (document.activeElement === e.currentTarget) {
               e.preventDefault();
-              setDetailItem(activeItem);
+              openDetailAndMarkRead(activeItem);
             }
           }
         }}
@@ -895,21 +1000,56 @@ export function BellistaBulletinCardFan({
             ) : null}
           </div>
 
-          {variant === "dashboard" ? (
-            <Link
-              href="/estudiante/cartelera"
-              onPointerDown={(e) => e.stopPropagation()}
-              className="pointer-events-auto inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold backdrop-blur-md transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:outline-none"
-              style={{
-                background: "var(--glass)",
-                boxShadow:
-                  "0 0 0 1px var(--glass-bd), 0 6px 20px -10px rgba(0,0,0,.2)",
-              }}
-            >
-              <span>Ver todos</span>
-              <ArrowUpRight className="size-3.5" aria-hidden="true" />
-            </Link>
-          ) : null}
+          <div className="pointer-events-auto flex items-center gap-1.5">
+            {readCountTotal > 0 ? (
+              onOpenReadArchive ? (
+                <button
+                  type="button"
+                  onClick={onOpenReadArchive}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="inline-flex cursor-pointer items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium backdrop-blur-md transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:outline-none"
+                  style={{
+                    background: "var(--glass)",
+                    boxShadow:
+                      "0 0 0 1px var(--glass-bd), 0 6px 20px -10px rgba(0,0,0,.2)",
+                  }}
+                >
+                  <CheckCheck className="size-3.5 text-emerald-500" aria-hidden="true" />
+                  <span>Leídos ({readCountTotal})</span>
+                </button>
+              ) : (
+                <Link
+                  href="/estudiante/cartelera?tab=leidos"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium backdrop-blur-md transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:outline-none"
+                  style={{
+                    background: "var(--glass)",
+                    boxShadow:
+                      "0 0 0 1px var(--glass-bd), 0 6px 20px -10px rgba(0,0,0,.2)",
+                  }}
+                >
+                  <CheckCheck className="size-3.5 text-emerald-500" aria-hidden="true" />
+                  <span>Leídos ({readCountTotal})</span>
+                </Link>
+              )
+            ) : null}
+
+            {variant === "dashboard" ? (
+              <Link
+                href="/estudiante/cartelera"
+                onPointerDown={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold backdrop-blur-md transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:outline-none"
+                style={{
+                  background: "var(--glass)",
+                  boxShadow:
+                    "0 0 0 1px var(--glass-bd), 0 6px 20px -10px rgba(0,0,0,.2)",
+                }}
+              >
+                <span>Ver cartelera</span>
+                <ArrowUpRight className="size-3.5" aria-hidden="true" />
+              </Link>
+            ) : null}
+          </div>
         </div>
 
         {/* Escenario interactivo del abanico */}
@@ -936,7 +1076,7 @@ export function BellistaBulletinCardFan({
             className="absolute inset-x-0"
             style={{ top: topPad, height: cardH }}
           >
-            {localItems.map((item, i) => {
+            {visibleItems.map((item, i) => {
               const slot = Math.round(wrap(i - active));
               const showFrontNote = narrow ? slot === 0 : Math.abs(slot) <= 1;
               return (
@@ -1007,9 +1147,9 @@ export function BellistaBulletinCardFan({
         {/* Sugerencia sutil izquierda */}
         <button
           type="button"
-          onClick={() => setDetailItem(activeItem)}
+          onClick={() => openDetailAndMarkRead(activeItem)}
           onPointerDown={(e) => e.stopPropagation()}
-          className="absolute bottom-4 left-4 z-[170] hidden items-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium backdrop-blur-md transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:outline-none sm:inline-flex sm:bottom-5 sm:left-5"
+          className="absolute bottom-4 left-4 z-[170] hidden cursor-pointer items-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium backdrop-blur-md transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:outline-none sm:inline-flex sm:bottom-5 sm:left-5"
           style={{
             background: "var(--glass)",
             boxShadow:
@@ -1029,7 +1169,7 @@ export function BellistaBulletinCardFan({
               boxShadow: "0 0 0 1px var(--glass-bd)",
             }}
           >
-            {localItems.map((it, i) => (
+            {visibleItems.map((it, i) => (
               <button
                 key={it.id}
                 type="button"
@@ -1108,7 +1248,7 @@ export function BellistaBulletinCardFan({
           </span>
 
           <span className="text-xs font-semibold">
-            {activeItem.hasRead ? "Enterado" : "Enterado"}
+            {activeItem.hasRead ? "Leído" : "Marcar leído"}
           </span>
 
           <span className="relative h-4 overflow-hidden text-xs leading-4 font-bold tabular-nums opacity-85">
@@ -1127,20 +1267,7 @@ export function BellistaBulletinCardFan({
         </button>
       </section>
 
-      <BulletinDetailDialog
-        item={detailItem}
-        open={detailItem !== null}
-        onOpenChange={(open) => {
-          if (!open) setDetailItem(null);
-        }}
-        showFullBulletinLink={variant === "dashboard"}
-        canEdit={Boolean(detailItem && canEditItem?.(detailItem))}
-        onEdit={(it) => {
-          setDetailItem(null);
-          onEditItem?.(it);
-        }}
-        onConfirmRead={handleConfirmRead}
-      />
+      {detailDialog}
     </>
   );
 }

@@ -3,18 +3,22 @@ import {
   SIGA_DATA_COLLECTION,
   getSentryEnvironment,
   getSentryTracesSampleRate,
+  isSentryRuntimeEnabled,
   scrubSentryBreadcrumb,
   scrubSentryEvent,
 } from "@/lib/analytics/sentry-scrub";
 
-const dsn = process.env.SENTRY_DSN?.trim() || process.env.NEXT_PUBLIC_SENTRY_DSN?.trim();
+const dsn =
+  process.env.SENTRY_DSN?.trim() || process.env.NEXT_PUBLIC_SENTRY_DSN?.trim();
 
-Sentry.init({
-  dsn,
-  enabled: Boolean(dsn),
-  environment: getSentryEnvironment(),
-  dataCollection: SIGA_DATA_COLLECTION,
-  tracesSampleRate: getSentryTracesSampleRate(),
-  beforeSend: scrubSentryEvent,
-  beforeBreadcrumb: scrubSentryBreadcrumb,
-});
+if (isSentryRuntimeEnabled(dsn)) {
+  Sentry.init({
+    dsn,
+    enabled: true,
+    environment: getSentryEnvironment(),
+    dataCollection: SIGA_DATA_COLLECTION,
+    tracesSampleRate: getSentryTracesSampleRate(),
+    beforeSend: scrubSentryEvent,
+    beforeBreadcrumb: scrubSentryBreadcrumb,
+  });
+}

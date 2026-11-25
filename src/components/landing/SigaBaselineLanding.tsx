@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
-import Lenis from "lenis";
+import type Lenis from "lenis";
 import {
   AlertCircle,
   ArrowUpRight,
@@ -22,16 +23,24 @@ import {
   resolveAuthErrorMessage,
 } from "@/components/auth/SigaCredentialsFields";
 import { startGoogleWorkspaceOAuth } from "@/lib/auth/client";
-import { HalftoneWordmarkFooter } from "@/components/ui/halftone-wordmark-footer";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { cn } from "@/lib/utils";
 import { AtmosphericGradient } from "./AtmosphericGradient";
-import { SponsorWarpCarousel } from "./SponsorWarpCarousel";
 import {
   CORE_HIGHLIGHT_ROWS,
   ROLE_MODULES,
   SPONSORS,
 } from "./siga-landing-data";
+
+const SponsorWarpCarousel = dynamic(() =>
+  import("./SponsorWarpCarousel").then((m) => m.SponsorWarpCarousel)
+);
+
+const HalftoneWordmarkFooter = dynamic(() =>
+  import("@/components/ui/halftone-wordmark-footer").then(
+    (m) => m.HalftoneWordmarkFooter
+  )
+);
 
 const STATUS_DOT: Record<"ok" | "accent" | "neutral", string> = {
   ok: "bg-[#2e8b3d]",
@@ -305,23 +314,89 @@ export function SigaBaselineLanding() {
     return () => observer.disconnect();
   }, []);
 
-  /* Inicializar desplazamiento suave (Lenis) y revelación inicial del Hero */
+  /* Inicializar desplazamiento suave (Lenis) en diferido tras el primer pintado */
   useEffect(() => {
-    const t = window.setTimeout(() => setHeroReady(true), 60);
-    const lenis = new Lenis({ smoothWheel: true });
-    lenisRef.current = lenis;
+    const t = window.setTimeout(() => setHeroReady(true), 40);
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
+    if (reducedMotion) {
+      return () => window.clearTimeout(t);
+    }
 
+    let cancelled = false;
+    let lenisInstance: Lenis | null = null;
     let lenisRafId = 0;
-    const raf = (time: number) => {
-      lenis.raf(time);
-      lenisRafId = window.requestAnimationFrame(raf);
+    let idleTimerId = 0;
+
+    const startLenis = async () => {
+      try {
+        const { default: LenisCtor } = await import("lenis");
+        if (cancelled) return;
+        const lenis = new LenisCtor({ smoothWheel: true });
+        lenisInstance = lenis;
+        lenisRef.current = lenis;
+
+        const raf = (time: number) => {
+          if (cancelled || document.visibilityState !== "visible") {
+            lenisRafId = 0;
+            return;
+          }
+          lenis.raf(time);
+          lenisRafId = window.requestAnimationFrame(raf);
+        };
+
+        const onVis = () => {
+          if (
+            document.visibilityState === "visible" &&
+            !cancelled &&
+            lenisRafId === 0
+          ) {
+            lenisRafId = window.requestAnimationFrame(raf);
+          }
+        };
+
+        document.addEventListener("visibilitychange", onVis);
+        lenisRafId = window.requestAnimationFrame(raf);
+
+        return () => {
+          document.removeEventListener("visibilitychange", onVis);
+        };
+      } catch {
+        return undefined;
+      }
     };
-    lenisRafId = window.requestAnimationFrame(raf);
+
+    let removeVisListener: (() => void) | undefined;
+    if (typeof window.requestIdleCallback === "function") {
+      idleTimerId = window.requestIdleCallback(
+        () => {
+          void startLenis().then((cleanup) => {
+            removeVisListener = cleanup;
+          });
+        },
+        { timeout: 600 }
+      );
+    } else {
+      idleTimerId = window.setTimeout(() => {
+        void startLenis().then((cleanup) => {
+          removeVisListener = cleanup;
+        });
+      }, 180);
+    }
 
     return () => {
+      cancelled = true;
       window.clearTimeout(t);
+      if (typeof window.cancelIdleCallback === "function") {
+        window.cancelIdleCallback(idleTimerId);
+      } else {
+        window.clearTimeout(idleTimerId);
+      }
+      removeVisListener?.();
       window.cancelAnimationFrame(lenisRafId);
-      lenis.destroy();
+      lenisInstance?.destroy();
+      lenisRef.current = null;
     };
   }, []);
 

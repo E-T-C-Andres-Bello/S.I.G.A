@@ -17,7 +17,6 @@ import { cn } from "cn";
 import { NotificationsBellPopover } from "@/components/shared/NotificationsBellPopover";
 import { NotificationsProvider } from "@/components/shared/NotificationsProvider";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
-import { SigaGlobalLoader } from "@/components/ui/ai-loader";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { signOutClientSession } from "@/lib/auth/client";
@@ -27,7 +26,6 @@ import { DashboardSidebar, ROLE_LABELS } from "./DashboardSidebar";
 import { GlassThemeProvider } from "./GlassThemeContext";
 
 const SIDEBAR_STORAGE_KEY = "siga-sidebar-expanded-v1";
-const INTRO_SHOWN_KEY = "siga-intro-shown-v1";
 
 export interface DashboardShellProps {
   profile: DashboardUserProfile;
@@ -52,7 +50,6 @@ export function DashboardShell({
   const [profileMenuOpen, setProfileMenuOpen] = React.useState(false);
   const [sidebarExpanded, setSidebarExpanded] = React.useState(false);
   const [signingOut, setSigningOut] = React.useState(false);
-  const [showIntroLoader, setShowIntroLoader] = React.useState(false);
 
   React.useEffect(() => {
     try {
@@ -63,35 +60,6 @@ export function DashboardShell({
     } catch {
       // Ignorar si almacenamiento local está restringido.
     }
-
-    const reduced = window.matchMedia(
-      "(prefers-reduced-motion: reduce)"
-    ).matches;
-    if (reduced) return;
-
-    let alreadyShown = false;
-    try {
-      alreadyShown = window.sessionStorage.getItem(INTRO_SHOWN_KEY) === "1";
-    } catch {
-      // Ignorar si sessionStorage está restringido.
-    }
-
-    if (alreadyShown) {
-      setShowIntroLoader(false);
-      return;
-    }
-
-    setShowIntroLoader(true);
-    const timer = window.setTimeout(() => {
-      try {
-        window.sessionStorage.setItem(INTRO_SHOWN_KEY, "1");
-      } catch {
-        // Ignorar fallo de cuota.
-      }
-      setShowIntroLoader(false);
-    }, 1250);
-
-    return () => window.clearTimeout(timer);
   }, []);
 
   const toggleSidebarExpanded = React.useCallback(() => {
@@ -149,13 +117,6 @@ export function DashboardShell({
             initialUnreadCount={profile.unreadNotificationsCount}
           >
             <div className="siga-dashboard-bg font-hero relative min-h-screen text-foreground transition-colors duration-300">
-          {showIntroLoader ? (
-            <SigaGlobalLoader
-              text="S.I.G.A."
-              subtitle={`Módulo ${ROLE_LABELS[profile.primaryRole]} · ${profile.firstName}`}
-              className="animate-siga-loader-autohide pointer-events-none z-[120]"
-            />
-          ) : null}
           <a
             href="#main"
             className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:rounded-full focus:bg-primary focus:px-4 focus:py-2 focus:text-xs focus:font-medium focus:text-primary-foreground"

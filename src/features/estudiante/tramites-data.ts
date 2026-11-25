@@ -98,38 +98,60 @@ export async function getStudentTramitesData(
   return withUserDb(
     { authUserId: session.authUserId, email: session.email },
     async (client) => {
-      const e = await querySingleRow<EnrollmentJoinRow>(
+      const combined = await querySingleRow<{
+        enrollment_json: EnrollmentJoinRow | null;
+        requests_json: RequestRow[] | null;
+        documents_json: OfficialDocRow[] | null;
+      }>(
         client,
-        `SELECT e.id,
-                e.grade_year,
-                e.enrollment_status,
-                s.section_letter,
-                m.name AS mencion_name,
-                sy.name AS school_year_name
-           FROM public.enrollments e
-           JOIN public.school_years sy ON sy.id = e.school_year_id AND sy.is_current = true
-           LEFT JOIN public.sections s ON s.id = e.section_id
-           LEFT JOIN public.menciones m ON m.id = e.mencion_id
-          WHERE e.student_user_id = $1::uuid
-            AND e.deleted_at IS NULL
-          ORDER BY e.created_at DESC
-          LIMIT 1`,
+        `SELECT
+           (
+             SELECT row_to_json(enr_row)
+               FROM (
+                 SELECT e.id,
+                        e.grade_year,
+                        e.enrollment_status,
+                        s.section_letter,
+                        m.name AS mencion_name,
+                        sy.name AS school_year_name
+                   FROM public.enrollments e
+                   JOIN public.school_years sy ON sy.id = e.school_year_id AND sy.is_current = true
+                   LEFT JOIN public.sections s ON s.id = e.section_id
+                   LEFT JOIN public.menciones m ON m.id = e.mencion_id
+                  WHERE e.student_user_id = $1::uuid
+                    AND e.deleted_at IS NULL
+                  ORDER BY e.created_at DESC
+                  LIMIT 1
+               ) enr_row
+           ) AS enrollment_json,
+           COALESCE(
+             (
+               SELECT json_agg(req_row ORDER BY req_row.created_at DESC)
+                 FROM (
+                   SELECT id, request_type, reason, status, sla_entered_at, resolved_at, official_document_id, created_at, updated_at
+                     FROM public.student_requests
+                    WHERE student_user_id = $1::uuid
+                 ) req_row
+             ),
+             '[]'::json
+           ) AS requests_json,
+           COALESCE(
+             (
+               SELECT json_agg(doc_row ORDER BY doc_row.issued_at DESC)
+                 FROM (
+                   SELECT id, verification_code, document_hash, document_type, status, issued_at, revoked_at, payload_snapshot
+                     FROM public.official_documents
+                    WHERE student_user_id = $1::uuid
+                 ) doc_row
+             ),
+             '[]'::json
+           ) AS documents_json`,
         [internalUserId]
       );
-      const requestsRes = await client.query<RequestRow>(
-        `SELECT id, request_type, reason, status, sla_entered_at, resolved_at, official_document_id, created_at, updated_at
-           FROM public.student_requests
-          WHERE student_user_id = $1::uuid
-          ORDER BY created_at DESC`,
-        [internalUserId]
-      );
-      const documentsRes = await client.query<OfficialDocRow>(
-        `SELECT id, verification_code, document_hash, document_type, status, issued_at, revoked_at, payload_snapshot
-           FROM public.official_documents
-          WHERE student_user_id = $1::uuid
-          ORDER BY issued_at DESC`,
-        [internalUserId]
-      );
+
+      const e = combined?.enrollment_json ?? null;
+      const requestRows = combined?.requests_json ?? [];
+      const documentRows = combined?.documents_json ?? [];
 
       return {
         enrollment: e
@@ -142,7 +164,7 @@ export async function getStudentTramitesData(
               schoolYearName: e.school_year_name,
             }
           : null,
-        requests: requestsRes.rows.map((r) => ({
+        requests: requestRows.map((r) => ({
           id: r.id,
           requestType: r.request_type,
           reason: r.reason,
@@ -153,7 +175,7 @@ export async function getStudentTramitesData(
           createdAt: r.created_at,
           updatedAt: r.updated_at,
         })),
-        officialDocuments: documentsRes.rows.map((doc) => ({
+        officialDocuments: documentRows.map((doc) => ({
           id: doc.id,
           verificationCode: doc.verification_code,
           documentHash: doc.document_hash,

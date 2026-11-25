@@ -1,8 +1,8 @@
 import type { DashboardUserProfile } from "@/lib/auth/dashboard-session";
-import { getServerAuthSession } from "@/lib/auth/server";
+import { getCachedAcademicCatalog } from "@/lib/db/catalog-cache";
 import {
-  callNeonRpcTableSafe,
   isNeonDatabaseConfigured,
+  querySingleRow,
   withUserDb,
   type NeonAuthSessionContext,
 } from "@/lib/db/neon";
@@ -534,232 +534,221 @@ function buildMomentsDetailForSubject(params: {
   });
 }
 
-async function fetchAcademicFoundation(internalUserId: string) {
+/**
+ * Carga en paralelo el catálogo curricular cacheado y, en una ÚNICA transacción
+ * RLS en Neon, toda la matrícula histórica/activa, evaluaciones, notas y telemetría.
+ */
+async function fetchUnifiedCurriculumContext(profile: DashboardUserProfile) {
   if (!isNeonDatabaseConfigured()) {
     return null;
   }
 
-  const session = await getServerAuthSession();
-  if (!session) {
-    return null;
-  }
-
   const authSession: NeonAuthSessionContext = {
-    authUserId: session.authUserId,
-    email: session.email,
+    authUserId: profile.authUserId,
+    email: profile.authEmail,
   };
+  const isVerified = profile.accessTier === "verified_workspace";
 
-  const { menciones, curriculumRows, enrollments, pendingAttempts } =
-    await withUserDb(authSession, async (client) => {
-      const mencionesRes = await client.query<MencionRow>(
-        `SELECT id, code, name, specialty, description
-           FROM public.menciones
-          WHERE is_active = true
-          ORDER BY name ASC`
+  const [catalog, dbBundle] = await Promise.all([
+    getCachedAcademicCatalog(),
+    withUserDb(authSession, async (client) => {
+      const snapshot = await querySingleRow<{
+        enrollments_json: EnrollmentDetailRow[] | null;
+        pending_json: PendingAttemptRow[] | null;
+        all_momentos_json: MomentRow[] | null;
+        teacher_assignments_json: TeacherAssignmentRow[] | null;
+        eval_plans_json: EvalPlanRow[] | null;
+        eval_items_json: EvalItemRow[] | null;
+        scores_json: StudentScoreDetailRow[] | null;
+        final_grades_json: MomentFinalGradeDetailRow[] | null;
+      }>(
+        client,
+        `WITH enr_all AS (
+           SELECT e.id,
+                  e.section_id,
+                  e.grade_year,
+                  e.mencion_id,
+                  e.school_year_id,
+                  e.enrollment_status,
+                  sy.is_current AS sy_is_current,
+                  CASE WHEN sec.id IS NOT NULL THEN json_build_object('section_letter', sec.section_letter) ELSE NULL END AS sections,
+                  CASE WHEN m.id IS NOT NULL THEN json_build_object('code', m.code, 'name', m.name, 'specialty', m.specialty) ELSE NULL END AS menciones,
+                  json_build_object(
+                    'code', sy.code,
+                    'name', sy.name,
+                    'is_current', sy.is_current,
+                    'status', sy.status,
+                    'start_date', sy.start_date
+                  ) AS school_years
+             FROM public.enrollments e
+             JOIN public.school_years sy ON sy.id = e.school_year_id
+             LEFT JOIN public.sections sec ON sec.id = e.section_id
+             LEFT JOIN public.menciones m ON m.id = e.mencion_id
+            WHERE e.student_user_id = $1::uuid
+              AND e.deleted_at IS NULL
+         ),
+         cur_enr AS (
+           SELECT *
+             FROM enr_all
+            ORDER BY sy_is_current DESC, grade_year DESC
+            LIMIT 1
+         ),
+         ta_list AS (
+           SELECT ta.id, ta.curriculum_subject_id
+             FROM public.teacher_assignments ta
+             JOIN cur_enr ce ON ce.school_year_id = ta.school_year_id AND ce.section_id = ta.section_id
+            WHERE ta.is_active = true
+         ),
+         plan_list AS (
+           SELECT ep.id, ep.teacher_assignment_id, ep.momento_id, ep.title, ep.status
+             FROM public.evaluation_plans ep
+             JOIN ta_list ta ON ta.id = ep.teacher_assignment_id
+            WHERE $2::boolean = true
+              AND ep.status = ANY(ARRAY['published', 'locked'])
+         )
+         SELECT
+           COALESCE((
+             SELECT json_agg(ea ORDER BY ea.grade_year DESC)
+               FROM (
+                 SELECT id, section_id, grade_year, mencion_id, school_year_id, enrollment_status, sections, menciones, school_years
+                   FROM enr_all
+               ) ea
+           ), '[]'::json) AS enrollments_json,
+           COALESCE((
+             SELECT json_agg(pa_row ORDER BY pa_row.exam_date DESC)
+               FROM (
+                 SELECT psa.id,
+                        psa.curriculum_subject_id,
+                        psa.attempt_number,
+                        psa.exam_date,
+                        psa.final_numeric,
+                        psa.passed,
+                        CASE WHEN cs.id IS NOT NULL THEN json_build_object('subjects', json_build_object('code', subj.code, 'name', subj.name)) ELSE NULL END AS curriculum_subjects
+                   FROM public.pending_subject_attempts psa
+                   LEFT JOIN public.curriculum_subjects cs ON cs.id = psa.curriculum_subject_id
+                   LEFT JOIN public.subjects subj ON subj.id = cs.subject_id
+                  WHERE psa.student_user_id = $1::uuid
+               ) pa_row
+           ), '[]'::json) AS pending_json,
+           COALESCE((
+             SELECT json_agg(mo_row ORDER BY mo_row.moment_number ASC)
+               FROM (
+                 SELECT mo.id, mo.school_year_id, mo.moment_number, mo.name, mo.status
+                   FROM public.momentos mo
+                  WHERE mo.school_year_id IN (SELECT DISTINCT school_year_id FROM enr_all)
+               ) mo_row
+           ), '[]'::json) AS all_momentos_json,
+           COALESCE((SELECT json_agg(ta) FROM ta_list ta), '[]'::json) AS teacher_assignments_json,
+           COALESCE((SELECT json_agg(pl) FROM plan_list pl), '[]'::json) AS eval_plans_json,
+           COALESCE((
+             SELECT json_agg(ei_row ORDER BY ei_row.scheduled_date ASC NULLS LAST)
+               FROM (
+                 SELECT ei.id, ei.evaluation_plan_id, ei.title, ei.evaluation_type, ei.weight_percent, ei.max_points, ei.scheduled_date
+                   FROM public.evaluation_items ei
+                   JOIN plan_list pl ON pl.id = ei.evaluation_plan_id
+               ) ei_row
+           ), '[]'::json) AS eval_items_json,
+           COALESCE((
+             SELECT json_agg(sc_row)
+               FROM (
+                 SELECT ss.evaluation_item_id, ss.numeric_score, ss.literal_grade, ss.source
+                   FROM public.student_scores ss
+                   JOIN cur_enr ce ON ce.id = ss.enrollment_id
+                  WHERE $2::boolean = true
+                    AND ss.deleted_at IS NULL
+               ) sc_row
+           ), '[]'::json) AS scores_json,
+           COALESCE((
+             SELECT json_agg(fg_row)
+               FROM (
+                 SELECT mfg.enrollment_id,
+                        mfg.momento_id,
+                        mfg.curriculum_subject_id,
+                        mfg.raw_weighted_avg,
+                        mfg.final_numeric,
+                        mfg.final_literal,
+                        mfg.qualitative_observation,
+                        mfg.is_locked
+                   FROM public.moment_final_grades mfg
+                  WHERE mfg.enrollment_id IN (SELECT id FROM enr_all)
+               ) fg_row
+           ), '[]'::json) AS final_grades_json`,
+        [profile.internalUserId, isVerified]
       );
-      const curriculumRes = await client.query<CurriculumMatrixRow>(
-        `SELECT cs.id,
-                cs.mencion_id,
-                cs.grade_year,
-                cs.weekly_hours,
-                cs.annual_hours,
-                cs.curriculum_component,
-                cs.display_order,
-                json_build_object(
-                  'id', s.id,
-                  'code', s.code,
-                  'name', s.name,
-                  'grading_scale', s.grading_scale,
-                  'passing_threshold', s.passing_threshold,
-                  'is_technical_core', s.is_technical_core
-                ) AS subjects
-           FROM public.curriculum_subjects cs
-           JOIN public.subjects s ON s.id = cs.subject_id
-          WHERE cs.is_active = true
-          ORDER BY cs.display_order ASC`
-      );
-      const enrollmentsRes = await client.query<EnrollmentDetailRow>(
-        `SELECT e.id,
-                e.section_id,
-                e.grade_year,
-                e.mencion_id,
-                e.school_year_id,
-                e.enrollment_status,
-                CASE WHEN sec.id IS NOT NULL THEN json_build_object('section_letter', sec.section_letter) ELSE NULL END AS sections,
-                CASE WHEN m.id IS NOT NULL THEN json_build_object('code', m.code, 'name', m.name, 'specialty', m.specialty) ELSE NULL END AS menciones,
-                json_build_object(
-                  'code', sy.code,
-                  'name', sy.name,
-                  'is_current', sy.is_current,
-                  'status', sy.status,
-                  'start_date', sy.start_date
-                ) AS school_years
-           FROM public.enrollments e
-           JOIN public.school_years sy ON sy.id = e.school_year_id
-           LEFT JOIN public.sections sec ON sec.id = e.section_id
-           LEFT JOIN public.menciones m ON m.id = e.mencion_id
-          WHERE e.student_user_id = $1::uuid
-            AND e.deleted_at IS NULL
-          ORDER BY e.grade_year DESC`,
-        [internalUserId]
-      );
-      const pendingRes = await client.query<PendingAttemptRow>(
-        `SELECT psa.id,
-                psa.curriculum_subject_id,
-                psa.attempt_number,
-                psa.exam_date,
-                psa.final_numeric,
-                psa.passed,
-                CASE WHEN cs.id IS NOT NULL THEN json_build_object('subjects', json_build_object('code', subj.code, 'name', subj.name)) ELSE NULL END AS curriculum_subjects
-           FROM public.pending_subject_attempts psa
-           LEFT JOIN public.curriculum_subjects cs ON cs.id = psa.curriculum_subject_id
-           LEFT JOIN public.subjects subj ON subj.id = cs.subject_id
-          WHERE psa.student_user_id = $1::uuid
-          ORDER BY psa.exam_date DESC`,
-        [internalUserId]
-      );
+
+      const enrollments = snapshot?.enrollments_json ?? [];
+      const currentEnrollment =
+        enrollments.find((e) => unwrapSingle(e.school_years)?.is_current) ??
+        enrollments[0] ??
+        null;
+
+      let scheduleRows: ScheduleRpcRow[] = [];
+      let telemetryRows: TelemetryRpcRow[] = [];
+
+      if (currentEnrollment && isVerified) {
+        await client.query("SAVEPOINT siga_subj_rpcs");
+        try {
+          const rpcCombo = await querySingleRow<{
+            schedule_json: ScheduleRpcRow[] | null;
+            telemetry_json: TelemetryRpcRow[] | null;
+          }>(
+            client,
+            `SELECT
+               COALESCE((SELECT json_agg(s) FROM public.siga_get_student_section_schedule() s), '[]'::json) AS schedule_json,
+               COALESCE((SELECT json_agg(t) FROM public.siga_get_student_subject_telemetry() t), '[]'::json) AS telemetry_json`
+          );
+          await client.query("RELEASE SAVEPOINT siga_subj_rpcs");
+          scheduleRows = rpcCombo?.schedule_json ?? [];
+          telemetryRows = rpcCombo?.telemetry_json ?? [];
+        } catch {
+          await client.query("ROLLBACK TO SAVEPOINT siga_subj_rpcs");
+          await client.query("RELEASE SAVEPOINT siga_subj_rpcs");
+        }
+      }
+
+      const allMomentos = snapshot?.all_momentos_json ?? [];
+      const details = currentEnrollment
+        ? {
+            allMomentos,
+            momentos: allMomentos.filter(
+              (m) => m.school_year_id === currentEnrollment.school_year_id
+            ),
+            teacherAssignments: snapshot?.teacher_assignments_json ?? [],
+            evalPlans: snapshot?.eval_plans_json ?? [],
+            evalItems: snapshot?.eval_items_json ?? [],
+            scores: snapshot?.scores_json ?? [],
+            finalGrades: snapshot?.final_grades_json ?? [],
+            scheduleRows,
+            telemetryRows,
+          }
+        : null;
 
       return {
-        menciones: mencionesRes.rows,
-        curriculumRows: curriculumRes.rows,
-        enrollments: enrollmentsRes.rows,
-        pendingAttempts: pendingRes.rows,
+        enrollments,
+        currentEnrollment,
+        pendingAttempts: snapshot?.pending_json ?? [],
+        details,
       };
-    });
+    }),
+  ]);
 
-  const currentEnrollment =
-    enrollments.find((e) => unwrapSingle(e.school_years)?.is_current) ??
-    enrollments[0] ??
-    null;
+  const menciones: MencionRow[] = catalog.menciones;
+  const curriculumRows: CurriculumMatrixRow[] = catalog.curriculumRows;
 
   return {
-    dbClient: authSession,
     menciones,
     curriculumRows,
-    enrollments,
-    currentEnrollment,
-    pendingAttempts,
+    enrollments: dbBundle.enrollments,
+    currentEnrollment: dbBundle.currentEnrollment,
+    pendingAttempts: dbBundle.pendingAttempts,
+    details: dbBundle.details,
   };
-}
-
-/**
- * Ejecuta todas las consultas del período activo en Neon bajo una sola transacción RLS.
- */
-async function fetchActiveEnrollmentDetails(
-  authSession: NeonAuthSessionContext,
-  enrollment: EnrollmentDetailRow,
-  allEnrollmentIds: string[],
-  allSchoolYearIds: string[],
-  accessTier: DashboardUserProfile["accessTier"]
-) {
-  const isVerified = accessTier === "verified_workspace";
-  const targetSchoolYearIds =
-    allSchoolYearIds.length > 0 ? allSchoolYearIds : [enrollment.school_year_id];
-
-  return withUserDb(authSession, async (client) => {
-    const momentosRes = await client.query<MomentRow>(
-      `SELECT id, school_year_id, moment_number, name, status
-         FROM public.momentos
-        WHERE school_year_id = ANY($1::uuid[])
-        ORDER BY moment_number ASC`,
-      [targetSchoolYearIds]
-    );
-    const teacherAssignmentsRes = await client.query<TeacherAssignmentRow>(
-      `SELECT id, curriculum_subject_id
-         FROM public.teacher_assignments
-        WHERE school_year_id = $1::uuid
-          AND section_id = $2::uuid
-          AND is_active = true`,
-      [enrollment.school_year_id, enrollment.section_id]
-    );
-    const evalPlansRes = isVerified
-      ? await client.query<EvalPlanRow>(
-          `SELECT ep.id, ep.teacher_assignment_id, ep.momento_id, ep.title, ep.status
-             FROM public.evaluation_plans ep
-             JOIN public.teacher_assignments ta ON ta.id = ep.teacher_assignment_id
-            WHERE ta.school_year_id = $1::uuid
-              AND ta.section_id = $2::uuid
-              AND ep.status = ANY($3::text[])`,
-          [enrollment.school_year_id, enrollment.section_id, ["published", "locked"]]
-        )
-      : { rows: [] as EvalPlanRow[] };
-    const evalItemsRes = isVerified
-      ? await client.query<EvalItemRow>(
-          `SELECT ei.id,
-                  ei.evaluation_plan_id,
-                  ei.title,
-                  ei.evaluation_type,
-                  ei.weight_percent,
-                  ei.max_points,
-                  ei.scheduled_date
-             FROM public.evaluation_items ei
-             JOIN public.evaluation_plans ep ON ep.id = ei.evaluation_plan_id
-             JOIN public.teacher_assignments ta ON ta.id = ep.teacher_assignment_id
-            WHERE ta.school_year_id = $1::uuid
-              AND ta.section_id = $2::uuid
-              AND ep.status = ANY($3::text[])
-            ORDER BY ei.scheduled_date ASC NULLS LAST`,
-          [enrollment.school_year_id, enrollment.section_id, ["published", "locked"]]
-        )
-      : { rows: [] as EvalItemRow[] };
-    const scoresRes = isVerified
-      ? await client.query<StudentScoreDetailRow>(
-          `SELECT evaluation_item_id, numeric_score, literal_grade, source
-             FROM public.student_scores
-            WHERE enrollment_id = $1::uuid
-              AND deleted_at IS NULL`,
-          [enrollment.id]
-        )
-      : { rows: [] as StudentScoreDetailRow[] };
-    const finalGradesRes =
-      allEnrollmentIds.length > 0
-        ? await client.query<MomentFinalGradeDetailRow>(
-            `SELECT enrollment_id,
-                    momento_id,
-                    curriculum_subject_id,
-                    raw_weighted_avg,
-                    final_numeric,
-                    final_literal,
-                    qualitative_observation,
-                    is_locked
-               FROM public.moment_final_grades
-              WHERE enrollment_id = ANY($1::uuid[])`,
-            [allEnrollmentIds]
-          )
-        : { rows: [] as MomentFinalGradeDetailRow[] };
-    const scheduleRows = isVerified
-      ? await callNeonRpcTableSafe<ScheduleRpcRow>(
-          client,
-          "siga_get_student_section_schedule"
-        )
-      : ([] as ScheduleRpcRow[]);
-    const telemetryRows = isVerified
-      ? await callNeonRpcTableSafe<TelemetryRpcRow>(
-          client,
-          "siga_get_student_subject_telemetry"
-        )
-      : ([] as TelemetryRpcRow[]);
-
-    const allMomentos = momentosRes.rows;
-
-    return {
-      allMomentos,
-      momentos: allMomentos.filter(
-        (m) => m.school_year_id === enrollment.school_year_id
-      ),
-      teacherAssignments: teacherAssignmentsRes.rows,
-      evalPlans: evalPlansRes.rows,
-      evalItems: evalItemsRes.rows,
-      scores: scoresRes.rows,
-      finalGrades: finalGradesRes.rows,
-      scheduleRows,
-      telemetryRows,
-    };
-  });
 }
 
 function indexEnrollmentDetails(
-  details: Awaited<ReturnType<typeof fetchActiveEnrollmentDetails>> | null,
+  details: NonNullable<
+    Awaited<ReturnType<typeof fetchUnifiedCurriculumContext>>
+  >["details"],
   curriculumRows: CurriculumMatrixRow[],
   currentEnrollmentId: string | null
 ) {
@@ -885,7 +874,7 @@ export async function getStudentCurriculumOverviewData(
   const fullName = `${profile.firstName} ${profile.lastName}`.trim();
   const cedulaDisplay = formatCedulaDisplay(profile.cedula);
 
-  const foundation = await fetchAcademicFoundation(profile.internalUserId);
+  const foundation = await fetchUnifiedCurriculumContext(profile);
   if (!foundation) {
     return {
       hasEnrollment: false,
@@ -949,27 +938,13 @@ export async function getStudentCurriculumOverviewData(
   }
 
   const {
-    dbClient,
     menciones,
     curriculumRows,
     enrollments,
     currentEnrollment,
     pendingAttempts,
+    details,
   } = foundation;
-
-  const allSchoolYearIds = Array.from(
-    new Set(enrollments.map((e) => e.school_year_id))
-  );
-
-  const details = currentEnrollment
-    ? await fetchActiveEnrollmentDetails(
-        dbClient,
-        currentEnrollment,
-        enrollments.map((e) => e.id),
-        allSchoolYearIds,
-        profile.accessTier
-      )
-    : null;
 
   const indexed = indexEnrollmentDetails(
     details,
@@ -1430,15 +1405,14 @@ export async function getStudentSubjectDetailData(
   const normalizedCode = decodeURIComponent(rawSubjectCode).trim().toUpperCase();
   if (!normalizedCode) return null;
 
-  const foundation = await fetchAcademicFoundation(profile.internalUserId);
+  const foundation = await fetchUnifiedCurriculumContext(profile);
   if (!foundation) return null;
 
   const {
-    dbClient,
     curriculumRows,
-    enrollments,
     currentEnrollment,
     pendingAttempts,
+    details,
   } = foundation;
 
   const matchingRows = curriculumRows.filter(
@@ -1465,20 +1439,6 @@ export async function getStudentSubjectDetailData(
     enrolledCurriculumRow ?? rowsInTargetMencion[0] ?? matchingRows[0]!;
   const subj = unwrapSingle(chosenRow.subjects);
   if (!subj) return null;
-
-  const allSchoolYearIds = Array.from(
-    new Set(enrollments.map((e) => e.school_year_id))
-  );
-
-  const details = currentEnrollment
-    ? await fetchActiveEnrollmentDetails(
-        dbClient,
-        currentEnrollment,
-        enrollments.map((e) => e.id),
-        allSchoolYearIds,
-        profile.accessTier
-      )
-    : null;
 
   const indexed = indexEnrollmentDetails(
     details,

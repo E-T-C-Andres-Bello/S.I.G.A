@@ -21,13 +21,16 @@ export interface NotificationsContextValue {
   markAsRead: (id: string, isRead?: boolean) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   refresh: () => Promise<void>;
+  ensureLoaded: () => void;
   hydrateFromServer: (items: NotificationItem[]) => void;
 }
 
 const NotificationsContext =
   React.createContext<NotificationsContextValue | null>(null);
 
-const POLL_INTERVAL_MS = 30_000;
+const POLL_INTERVAL_MS = 60_000;
+const VISIBILITY_COOLDOWN_MS = 60_000;
+const INITIAL_DEFERRED_SYNC_MS = 25_000;
 
 export function NotificationsProvider({
   internalUserId,
@@ -42,19 +45,26 @@ export function NotificationsProvider({
     []
   );
   const [loadedOnce, setLoadedOnce] = React.useState(false);
-  const [loading, setLoading] = React.useState(true);
-  const [realtimeConnected, setRealtimeConnected] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+  const [realtimeConnected, setRealtimeConnected] = React.useState(true);
   const [busyAll, setBusyAll] = React.useState(false);
 
   const markAllLockRef = React.useRef(false);
+  const inFlightRef = React.useRef(false);
   const pendingIdsRef = React.useRef<Set<string>>(new Set());
   const seenIdsRef = React.useRef<Set<string>>(new Set());
   const initializedRef = React.useRef(false);
+  const lastFetchedAtRef = React.useRef(0);
 
   const fetchNotifications = React.useCallback(async () => {
-    if (!internalUserId) {
-      setLoading(false);
+    if (!internalUserId || inFlightRef.current) {
       return;
+    }
+
+    inFlightRef.current = true;
+    lastFetchedAtRef.current = Date.now();
+    if (!initializedRef.current) {
+      setLoading(true);
     }
 
     try {
@@ -109,33 +119,47 @@ export function NotificationsProvider({
     } catch {
       setRealtimeConnected(false);
     } finally {
+      inFlightRef.current = false;
       setLoading(false);
     }
   }, [internalUserId]);
 
-  React.useEffect(() => {
-    void fetchNotifications();
+  const ensureLoaded = React.useCallback(() => {
+    if (!initializedRef.current && !inFlightRef.current) {
+      void fetchNotifications();
+    }
   }, [fetchNotifications]);
 
-  // Actualización periódica ligera cuando la pestaña está visible y al recuperar foco
+  // Sincronización inicial diferida para no competir con la carga e hidratación crítica
+  // de la ruta activa, más polling suave con enfriamiento al cambiar de pestaña.
   React.useEffect(() => {
     if (!internalUserId) return;
 
-    const timer = window.setInterval(() => {
+    const initialTimer = window.setTimeout(() => {
+      if (document.visibilityState === "visible" && !initializedRef.current) {
+        void fetchNotifications();
+      }
+    }, INITIAL_DEFERRED_SYNC_MS);
+
+    const pollTimer = window.setInterval(() => {
       if (document.visibilityState === "visible") {
         void fetchNotifications();
       }
     }, POLL_INTERVAL_MS);
 
     const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
+      if (
+        document.visibilityState === "visible" &&
+        Date.now() - lastFetchedAtRef.current >= VISIBILITY_COOLDOWN_MS
+      ) {
         void fetchNotifications();
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
-      window.clearInterval(timer);
+      window.clearTimeout(initialTimer);
+      window.clearInterval(pollTimer);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [internalUserId, fetchNotifications]);
@@ -143,6 +167,7 @@ export function NotificationsProvider({
   const hydrateFromServer = React.useCallback((items: NotificationItem[]) => {
     for (const it of items) seenIdsRef.current.add(it.id);
     initializedRef.current = true;
+    lastFetchedAtRef.current = Date.now();
 
     setNotifications((prev) => {
       if (prev.length === 0) return items;
@@ -247,10 +272,12 @@ export function NotificationsProvider({
       markAsRead,
       markAllAsRead,
       refresh: fetchNotifications,
+      ensureLoaded,
       hydrateFromServer,
     }),
     [
       busyAll,
+      ensureLoaded,
       fetchNotifications,
       hydrateFromServer,
       loading,

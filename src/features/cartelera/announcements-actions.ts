@@ -3,12 +3,71 @@
 import { revalidatePath } from "next/cache";
 import { getServerAuthSession, isAuthConfigured } from "@/lib/auth/server";
 import { callNeonRpcScalar, withUserDb } from "@/lib/db/neon";
+import { devWarn } from "@/lib/dev-logger";
 import {
   archiveAnnouncementSchema,
   confirmAnnouncementReadSchema,
   upsertAnnouncementSchema,
   type UpsertAnnouncementInput,
 } from "@/lib/validators/bulletin";
+
+function resolveBulletinNotifyFunctionUrl(): string | null {
+  const override = process.env.NEON_FUNCTION_BULLETINNOTIFY_URL?.trim();
+  if (override) return override.replace(/\/+$/, "");
+
+  const branchId = process.env.NEON_BRANCH_ID?.trim();
+  const hostSuffix = process.env.NEON_FUNCTION_HOST_SUFFIX?.trim();
+  if (!branchId || !hostSuffix) return null;
+
+  return `https://${branchId}-bulletinnotify${hostSuffix}`;
+}
+
+/**
+ * Despacha en segundo plano (best-effort) el workflow de notificación por correo
+ * (Neon Function `bulletinnotify` -> n8n -> Mailtrap) cuando se publica un comunicado.
+ * Nunca bloquea ni revierte la publicación en la cartelera.
+ */
+async function dispatchBulletinPublishEmailWorkflow(
+  announcementId: string
+): Promise<void> {
+  const targetUrl = resolveBulletinNotifyFunctionUrl();
+  if (!targetUrl) {
+    devWarn(
+      "neon:functions",
+      "Neon Function bulletinnotify no configurada; despacho de correo omitido"
+    );
+    return;
+  }
+
+  try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    const workflowSecret = process.env.WORKFLOW_WEBHOOK_SECRET?.trim();
+    if (workflowSecret) {
+      headers["x-siga-workflow-secret"] = workflowSecret;
+    }
+
+    const res = await fetch(targetUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ record_id: announcementId }),
+      signal: AbortSignal.timeout(5_000),
+    });
+
+    if (!res.ok) {
+      devWarn("neon:functions", "bulletinnotify respondió estado no exitoso", {
+        status: res.status,
+      });
+    }
+  } catch (error) {
+    devWarn(
+      "neon:functions",
+      "No se pudo invocar bulletinnotify (comunicado ya publicado)",
+      { reason: error instanceof Error ? error.message : "unknown" }
+    );
+  }
+}
 
 type ActionResult<T = undefined> =
   | ({ ok: true } & (T extends undefined ? Record<never, never> : { data: T }))
@@ -149,6 +208,10 @@ export async function upsertSchoolAnnouncementAction(
     revalidatePath("/estudiante");
     revalidatePath("/estudiante/cartelera");
     revalidatePath("/cartelera/gestion");
+
+    if (input.isPublished) {
+      void dispatchBulletinPublishEmailWorkflow(result.id);
+    }
 
     return {
       ok: true,

@@ -1,4 +1,5 @@
 import type { DashboardUserProfile } from "@/lib/auth/dashboard-session";
+import { getCachedAcademicCatalog } from "@/lib/db/catalog-cache";
 import {
   callNeonRpcTableSafe,
   isNeonDatabaseConfigured,
@@ -306,10 +307,163 @@ export async function getAulaVirtualCampusData(
   };
 
   if (isStudent) {
+    const [catalog, dbBundle] = await Promise.all([
+      getCachedAcademicCatalog(),
+      withUserDb(authSession, async (client) => {
+        const mainRow = await querySingleRow<{
+          enrollment_json: EnrollmentRow | null;
+          momentos_json: MomentRow[] | null;
+          assignments_json: TeacherAssignmentRow[] | null;
+          final_grades_json: MomentFinalGradeRow[] | null;
+          virtual_courses_json: VirtualCourseRow[] | null;
+          plans_json: EvalPlanRow[] | null;
+          items_json: EvalItemRow[] | null;
+          scores_json: StudentScoreRow[] | null;
+        }>(
+          client,
+          `WITH cur_enr AS (
+             SELECT e.id,
+                    e.section_id,
+                    e.grade_year,
+                    e.mencion_id,
+                    e.school_year_id,
+                    CASE WHEN s.id IS NOT NULL THEN json_build_object('section_letter', s.section_letter) ELSE NULL END AS sections,
+                    CASE WHEN m.id IS NOT NULL THEN json_build_object('code', m.code, 'name', m.name) ELSE NULL END AS menciones,
+                    json_build_object('name', sy.name, 'is_current', sy.is_current) AS school_years
+               FROM public.enrollments e
+               JOIN public.school_years sy ON sy.id = e.school_year_id AND sy.is_current = true
+               LEFT JOIN public.sections s ON s.id = e.section_id
+               LEFT JOIN public.menciones m ON m.id = e.mencion_id
+              WHERE e.student_user_id = $1::uuid
+                AND e.deleted_at IS NULL
+              ORDER BY e.created_at DESC
+              LIMIT 1
+           ),
+           ta_list AS (
+             SELECT ta.id,
+                    ta.curriculum_subject_id,
+                    CASE WHEN u.id IS NOT NULL THEN json_build_object('first_name', u.first_name, 'last_name', u.last_name) ELSE NULL END AS users
+               FROM public.teacher_assignments ta
+               JOIN cur_enr ce ON ce.school_year_id = ta.school_year_id AND ce.section_id = ta.section_id
+               LEFT JOIN public.users u ON u.id = ta.teacher_user_id
+              WHERE ta.is_active = true
+           ),
+           plan_list AS (
+             SELECT ep.id, ep.teacher_assignment_id, ep.momento_id, ep.title, ep.status
+               FROM public.evaluation_plans ep
+               JOIN ta_list ta ON ta.id = ep.teacher_assignment_id
+           ),
+           item_list AS (
+             SELECT ei.id, ei.evaluation_plan_id, ei.title, ei.evaluation_type, ei.weight_percent, ei.max_points, ei.scheduled_date
+               FROM public.evaluation_items ei
+               JOIN plan_list pl ON pl.id = ei.evaluation_plan_id
+           )
+           SELECT
+             (SELECT row_to_json(ce) FROM cur_enr ce) AS enrollment_json,
+             COALESCE((
+               SELECT json_agg(m_row ORDER BY m_row.moment_number ASC)
+                 FROM (
+                   SELECT mo.id, mo.moment_number, mo.name, mo.status
+                     FROM public.momentos mo
+                     JOIN cur_enr ce ON ce.school_year_id = mo.school_year_id
+                 ) m_row
+             ), '[]'::json) AS momentos_json,
+             COALESCE((SELECT json_agg(ta) FROM ta_list ta), '[]'::json) AS assignments_json,
+             COALESCE((
+               SELECT json_agg(fg_row)
+                 FROM (
+                   SELECT mfg.curriculum_subject_id, mfg.momento_id, mfg.final_numeric, mfg.final_literal
+                     FROM public.moment_final_grades mfg
+                     JOIN cur_enr ce ON ce.id = mfg.enrollment_id
+                 ) fg_row
+             ), '[]'::json) AS final_grades_json,
+             COALESCE((
+               SELECT json_agg(vc_row)
+                 FROM (
+                   SELECT v.id, v.teacher_assignment_id, v.welcome_message, v.ai_tutor_enabled, v.is_published
+                     FROM public.virtual_courses v
+                     JOIN ta_list ta ON ta.id = v.teacher_assignment_id
+                 ) vc_row
+             ), '[]'::json) AS virtual_courses_json,
+             COALESCE((SELECT json_agg(pl) FROM plan_list pl), '[]'::json) AS plans_json,
+             COALESCE((
+               SELECT json_agg(il ORDER BY il.scheduled_date ASC NULLS LAST)
+                 FROM item_list il
+             ), '[]'::json) AS items_json,
+             COALESCE((
+               SELECT json_agg(sc_row)
+                 FROM (
+                   SELECT ss.evaluation_item_id, ss.numeric_score, ss.literal_grade
+                     FROM public.student_scores ss
+                     JOIN cur_enr ce ON ce.id = ss.enrollment_id
+                     JOIN item_list il ON il.id = ss.evaluation_item_id
+                    WHERE ss.deleted_at IS NULL
+                 ) sc_row
+             ), '[]'::json) AS scores_json`,
+          [profile.internalUserId]
+        );
+
+        const enrollmentRow = mainRow?.enrollment_json ?? null;
+        if (!enrollmentRow) {
+          return {
+            enrollment: null,
+            momentos: [] as MomentRow[],
+            assignments: [] as TeacherAssignmentRow[],
+            finalGrades: [] as MomentFinalGradeRow[],
+            scheduleRows: [] as ScheduleRpcRow[],
+            virtualCoursesMap: new Map<string, VirtualCourseRow>(),
+            plansByAssignmentId: new Map<string, EvalPlanRow[]>(),
+            itemsByPlanId: new Map<string, EvalItemRow[]>(),
+            scoresByItemId: new Map<string, StudentScoreRow>(),
+          };
+        }
+
+        const schedRows = await callNeonRpcTableSafe<ScheduleRpcRow>(
+          client,
+          "siga_get_student_section_schedule"
+        );
+
+        const vcMap = new Map<string, VirtualCourseRow>();
+        for (const vc of mainRow?.virtual_courses_json ?? []) {
+          vcMap.set(vc.teacher_assignment_id, vc);
+        }
+
+        const plansMap = new Map<string, EvalPlanRow[]>();
+        for (const p of mainRow?.plans_json ?? []) {
+          const list = plansMap.get(p.teacher_assignment_id) ?? [];
+          list.push(p);
+          plansMap.set(p.teacher_assignment_id, list);
+        }
+
+        const itemsMap = new Map<string, EvalItemRow[]>();
+        for (const item of mainRow?.items_json ?? []) {
+          const list = itemsMap.get(item.evaluation_plan_id) ?? [];
+          list.push(item);
+          itemsMap.set(item.evaluation_plan_id, list);
+        }
+
+        const scoresMap = new Map<string, StudentScoreRow>();
+        for (const sc of mainRow?.scores_json ?? []) {
+          scoresMap.set(sc.evaluation_item_id, sc);
+        }
+
+        return {
+          enrollment: enrollmentRow,
+          momentos: mainRow?.momentos_json ?? [],
+          assignments: mainRow?.assignments_json ?? [],
+          finalGrades: mainRow?.final_grades_json ?? [],
+          scheduleRows: schedRows,
+          virtualCoursesMap: vcMap,
+          plansByAssignmentId: plansMap,
+          itemsByPlanId: itemsMap,
+          scoresByItemId: scoresMap,
+        };
+      }),
+    ]);
+
     const {
       enrollment,
       momentos,
-      currSubjects,
       assignments,
       finalGrades,
       scheduleRows,
@@ -317,169 +471,23 @@ export async function getAulaVirtualCampusData(
       plansByAssignmentId,
       itemsByPlanId,
       scoresByItemId,
-    } = await withUserDb(authSession, async (client) => {
-      const enrollmentRow = await querySingleRow<EnrollmentRow>(
-        client,
-        `SELECT e.id,
-                e.section_id,
-                e.grade_year,
-                e.mencion_id,
-                e.school_year_id,
-                CASE WHEN s.id IS NOT NULL THEN json_build_object('section_letter', s.section_letter) ELSE NULL END AS sections,
-                CASE WHEN m.id IS NOT NULL THEN json_build_object('code', m.code, 'name', m.name) ELSE NULL END AS menciones,
-                json_build_object('name', sy.name, 'is_current', sy.is_current) AS school_years
-           FROM public.enrollments e
-           JOIN public.school_years sy ON sy.id = e.school_year_id AND sy.is_current = true
-           LEFT JOIN public.sections s ON s.id = e.section_id
-           LEFT JOIN public.menciones m ON m.id = e.mencion_id
-          WHERE e.student_user_id = $1::uuid
-            AND e.deleted_at IS NULL
-          ORDER BY e.created_at DESC
-          LIMIT 1`,
-        [profile.internalUserId]
-      );
+    } = dbBundle;
 
-      if (!enrollmentRow) {
-        return {
-          enrollment: null,
-          momentos: [] as MomentRow[],
-          currSubjects: [] as CurriculumSubjectRow[],
-          assignments: [] as TeacherAssignmentRow[],
-          finalGrades: [] as MomentFinalGradeRow[],
-          scheduleRows: [] as ScheduleRpcRow[],
-          virtualCoursesMap: new Map<string, VirtualCourseRow>(),
-          plansByAssignmentId: new Map<string, EvalPlanRow[]>(),
-          itemsByPlanId: new Map<string, EvalItemRow[]>(),
-          scoresByItemId: new Map<string, StudentScoreRow>(),
-        };
-      }
-
-      const momentsRes = await client.query<MomentRow>(
-        `SELECT id, moment_number, name, status
-           FROM public.momentos
-          WHERE school_year_id = $1::uuid
-          ORDER BY moment_number ASC`,
-        [enrollmentRow.school_year_id]
-      );
-      const currSubjectsRes = await client.query<CurriculumSubjectRow>(
-        `SELECT cs.id,
-                cs.weekly_hours,
-                cs.annual_hours,
-                cs.display_order,
-                json_build_object(
-                  'code', s.code,
-                  'name', s.name,
-                  'grading_scale', s.grading_scale,
-                  'is_technical_core', s.is_technical_core
-                ) AS subjects
-           FROM public.curriculum_subjects cs
-           JOIN public.subjects s ON s.id = cs.subject_id
-          WHERE cs.mencion_id = $1::uuid
-            AND cs.grade_year = $2
-            AND cs.is_active = true
-          ORDER BY cs.display_order ASC`,
-        [enrollmentRow.mencion_id, enrollmentRow.grade_year]
-      );
-      const assignmentsRes = await client.query<TeacherAssignmentRow>(
-        `SELECT ta.id,
-                ta.curriculum_subject_id,
-                CASE WHEN u.id IS NOT NULL THEN json_build_object('first_name', u.first_name, 'last_name', u.last_name) ELSE NULL END AS users
-           FROM public.teacher_assignments ta
-           LEFT JOIN public.users u ON u.id = ta.teacher_user_id
-          WHERE ta.school_year_id = $1::uuid
-            AND ta.section_id = $2::uuid
-            AND ta.is_active = true`,
-        [enrollmentRow.school_year_id, enrollmentRow.section_id]
-      );
-      const finalGradesRes = await client.query<MomentFinalGradeRow>(
-        `SELECT curriculum_subject_id, momento_id, final_numeric, final_literal
-           FROM public.moment_final_grades
-          WHERE enrollment_id = $1::uuid`,
-        [enrollmentRow.id]
-      );
-      const schedRows = await callNeonRpcTableSafe<ScheduleRpcRow>(
-        client,
-        "siga_get_student_section_schedule"
-      );
-
-      const assignmentIds = assignmentsRes.rows.map((a) => a.id);
-      const vcMap = new Map<string, VirtualCourseRow>();
-      const plansMap = new Map<string, EvalPlanRow[]>();
-      const itemsMap = new Map<string, EvalItemRow[]>();
-      const scoresMap = new Map<string, StudentScoreRow>();
-
-      if (assignmentIds.length > 0) {
-        const vcRes = await client.query<VirtualCourseRow>(
-          `SELECT id, teacher_assignment_id, welcome_message, ai_tutor_enabled, is_published
-             FROM public.virtual_courses
-            WHERE teacher_assignment_id = ANY($1::uuid[])`,
-          [assignmentIds]
-        );
-        const plansRes = await client.query<EvalPlanRow>(
-          `SELECT id, teacher_assignment_id, momento_id, title, status
-             FROM public.evaluation_plans
-            WHERE teacher_assignment_id = ANY($1::uuid[])`,
-          [assignmentIds]
-        );
-
-        for (const vc of vcRes.rows) {
-          vcMap.set(vc.teacher_assignment_id, vc);
-        }
-
-        const planIds: string[] = [];
-        for (const p of plansRes.rows) {
-          planIds.push(p.id);
-          const list = plansMap.get(p.teacher_assignment_id) ?? [];
-          list.push(p);
-          plansMap.set(p.teacher_assignment_id, list);
-        }
-
-        if (planIds.length > 0) {
-          const evalItemsRes = await client.query<EvalItemRow>(
-            `SELECT id, evaluation_plan_id, title, evaluation_type, weight_percent, max_points, scheduled_date
-               FROM public.evaluation_items
-              WHERE evaluation_plan_id = ANY($1::uuid[])
-              ORDER BY scheduled_date ASC NULLS LAST`,
-            [planIds]
-          );
-
-          const itemIds: string[] = [];
-          for (const item of evalItemsRes.rows) {
-            itemIds.push(item.id);
-            const list = itemsMap.get(item.evaluation_plan_id) ?? [];
-            list.push(item);
-            itemsMap.set(item.evaluation_plan_id, list);
-          }
-
-          if (itemIds.length > 0) {
-            const scoreRowsRes = await client.query<StudentScoreRow>(
-              `SELECT evaluation_item_id, numeric_score, literal_grade
-                 FROM public.student_scores
-                WHERE enrollment_id = $1::uuid
-                  AND evaluation_item_id = ANY($2::uuid[])
-                  AND deleted_at IS NULL`,
-              [enrollmentRow.id, itemIds]
-            );
-            for (const sc of scoreRowsRes.rows) {
-              scoresMap.set(sc.evaluation_item_id, sc);
-            }
-          }
-        }
-      }
-
-      return {
-        enrollment: enrollmentRow,
-        momentos: momentsRes.rows,
-        currSubjects: currSubjectsRes.rows,
-        assignments: assignmentsRes.rows,
-        finalGrades: finalGradesRes.rows,
-        scheduleRows: schedRows,
-        virtualCoursesMap: vcMap,
-        plansByAssignmentId: plansMap,
-        itemsByPlanId: itemsMap,
-        scoresByItemId: scoresMap,
-      };
-    });
+    const currSubjects: CurriculumSubjectRow[] = enrollment
+      ? catalog.curriculumRows
+          .filter(
+            (cs) =>
+              cs.mencion_id === enrollment.mencion_id &&
+              cs.grade_year === enrollment.grade_year
+          )
+          .map((cs) => ({
+            id: cs.id,
+            weekly_hours: cs.weekly_hours,
+            annual_hours: cs.annual_hours,
+            display_order: cs.display_order,
+            subjects: cs.subjects,
+          }))
+      : [];
 
     if (!enrollment) {
       return {
@@ -716,54 +724,60 @@ export async function getAulaVirtualCampusData(
     };
   }
 
-  // Modo Docente / Coordinación / Dirección
+  // Modo Docente / Coordinación / Dirección (1 sola consulta CTE)
   const { rows, virtualCoursesMap } = await withUserDb(authSession, async (client) => {
-    const taRes = await client.query<TeacherAssignmentRow>(
-      `SELECT ta.id,
-              ta.curriculum_subject_id,
-              CASE WHEN sec.id IS NOT NULL THEN json_build_object(
-                'grade_year', sec.grade_year,
-                'section_letter', sec.section_letter,
-                'menciones', CASE WHEN m.id IS NOT NULL THEN json_build_object('code', m.code, 'name', m.name) ELSE NULL END
-              ) ELSE NULL END AS sections,
-              CASE WHEN cs.id IS NOT NULL THEN json_build_object(
-                'id', cs.id,
-                'weekly_hours', cs.weekly_hours,
-                'annual_hours', cs.annual_hours,
-                'display_order', cs.display_order,
-                'subjects', json_build_object(
-                  'code', subj.code,
-                  'name', subj.name,
-                  'grading_scale', subj.grading_scale,
-                  'is_technical_core', subj.is_technical_core
-                )
-              ) ELSE NULL END AS curriculum_subjects
-         FROM public.teacher_assignments ta
-         LEFT JOIN public.sections sec ON sec.id = ta.section_id
-         LEFT JOIN public.menciones m ON m.id = sec.mencion_id
-         LEFT JOIN public.curriculum_subjects cs ON cs.id = ta.curriculum_subject_id
-         LEFT JOIN public.subjects subj ON subj.id = cs.subject_id
-        WHERE ta.teacher_user_id = $1::uuid
-          AND ta.is_active = true`,
+    const staffRow = await querySingleRow<{
+      assignments_json: TeacherAssignmentRow[] | null;
+      vc_json: VirtualCourseRow[] | null;
+    }>(
+      client,
+      `WITH ta_rows AS (
+         SELECT ta.id,
+                ta.curriculum_subject_id,
+                CASE WHEN sec.id IS NOT NULL THEN json_build_object(
+                  'grade_year', sec.grade_year,
+                  'section_letter', sec.section_letter,
+                  'menciones', CASE WHEN m.id IS NOT NULL THEN json_build_object('code', m.code, 'name', m.name) ELSE NULL END
+                ) ELSE NULL END AS sections,
+                CASE WHEN cs.id IS NOT NULL THEN json_build_object(
+                  'id', cs.id,
+                  'weekly_hours', cs.weekly_hours,
+                  'annual_hours', cs.annual_hours,
+                  'display_order', cs.display_order,
+                  'subjects', json_build_object(
+                    'code', subj.code,
+                    'name', subj.name,
+                    'grading_scale', subj.grading_scale,
+                    'is_technical_core', subj.is_technical_core
+                  )
+                ) ELSE NULL END AS curriculum_subjects
+           FROM public.teacher_assignments ta
+           LEFT JOIN public.sections sec ON sec.id = ta.section_id
+           LEFT JOIN public.menciones m ON m.id = sec.mencion_id
+           LEFT JOIN public.curriculum_subjects cs ON cs.id = ta.curriculum_subject_id
+           LEFT JOIN public.subjects subj ON subj.id = cs.subject_id
+          WHERE ta.teacher_user_id = $1::uuid
+            AND ta.is_active = true
+       )
+       SELECT
+         COALESCE((SELECT json_agg(t) FROM ta_rows t), '[]'::json) AS assignments_json,
+         COALESCE((
+           SELECT json_agg(v_row)
+             FROM (
+               SELECT vc.id, vc.teacher_assignment_id, vc.welcome_message, vc.ai_tutor_enabled, vc.is_published
+                 FROM public.virtual_courses vc
+                 JOIN ta_rows t ON t.id = vc.teacher_assignment_id
+             ) v_row
+         ), '[]'::json) AS vc_json`,
       [profile.internalUserId]
     );
 
-    const assignmentIds = taRes.rows.map((r) => r.id);
     const vcMap = new Map<string, VirtualCourseRow>();
-
-    if (assignmentIds.length > 0) {
-      const vcRes = await client.query<VirtualCourseRow>(
-        `SELECT id, teacher_assignment_id, welcome_message, ai_tutor_enabled, is_published
-           FROM public.virtual_courses
-          WHERE teacher_assignment_id = ANY($1::uuid[])`,
-        [assignmentIds]
-      );
-      for (const vc of vcRes.rows) {
-        vcMap.set(vc.teacher_assignment_id, vc);
-      }
+    for (const vc of staffRow?.vc_json ?? []) {
+      vcMap.set(vc.teacher_assignment_id, vc);
     }
 
-    return { rows: taRes.rows, virtualCoursesMap: vcMap };
+    return { rows: staffRow?.assignments_json ?? [], virtualCoursesMap: vcMap };
   });
 
   let firstMencionCode: string | null = null;

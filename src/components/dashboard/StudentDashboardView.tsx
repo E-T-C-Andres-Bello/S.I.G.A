@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import {
@@ -17,12 +18,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "cn";
-import { BellistaBulletinCardFan } from "@/components/cartelera/BellistaBulletinCardFan";
-import { StudentFullCalendarDialog } from "@/components/estudiante/StudentFullCalendarDialog";
 import { StudentMedalsStrip } from "@/components/estudiante/StudentMedalsStrip";
-import { StudentSchedulePanel } from "@/components/estudiante/StudentSchedulePanel";
 import { TodaySchoolPulseCard } from "@/components/estudiante/TodaySchoolPulseCard";
-import { StudentCarnetView } from "@/components/qr/StudentCarnetView";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { StudentDashboardData } from "@/features/estudiante/dashboard-data";
@@ -32,12 +29,35 @@ import { formatVenezuelanCedulaDisplay } from "@/lib/validators/auth";
 import type { SchoolAnnouncementItem } from "@/lib/validators/bulletin";
 import { CountUp, SigaAnalyticsBento } from "./SigaAnalyticsBento";
 
+const BellistaBulletinCardFan = dynamic(() =>
+  import("@/components/cartelera/BellistaBulletinCardFan").then(
+    (m) => m.BellistaBulletinCardFan
+  )
+);
+
+const StudentFullCalendarDialog = dynamic(() =>
+  import("@/components/estudiante/StudentFullCalendarDialog").then(
+    (m) => m.StudentFullCalendarDialog
+  )
+);
+
+const StudentSchedulePanel = dynamic(() =>
+  import("@/components/estudiante/StudentSchedulePanel").then(
+    (m) => m.StudentSchedulePanel
+  )
+);
+
+const StudentCarnetView = dynamic(() =>
+  import("@/components/qr/StudentCarnetView").then((m) => m.StudentCarnetView)
+);
+
 export type StudentPortalTab = "resumen" | "horario" | "carnet";
 
 export interface StudentDashboardViewProps {
   profile: DashboardUserProfile;
   data: StudentDashboardData;
   bulletinHighlights?: SchoolAnnouncementItem[];
+  bulletinSlot?: React.ReactNode;
   initialCarnetToken?: StudentCarnetTokenPayload | null;
   initialCarnetError?: string | null;
   /** Fecha actual ISO (`YYYY-MM-DD`) en zona America/Caracas calculada en servidor. */
@@ -198,6 +218,7 @@ export function StudentDashboardView({
   profile,
   data,
   bulletinHighlights = [],
+  bulletinSlot,
   initialCarnetToken = null,
   initialCarnetError = null,
   todayIso,
@@ -834,11 +855,15 @@ export function StudentDashboardView({
         </motion.aside>
       </div>
 
-      {/* Bloque destacado — La Cartelera Bellista (Abanico dinámico con colores del evento) */}
-      <BellistaBulletinCardFan
-        items={bulletinHighlights}
-        variant="dashboard"
-      />
+      {/* Bloque destacado — La Cartelera Bellista (Streaming RSC o prop directa) */}
+      {bulletinSlot !== undefined ? (
+        bulletinSlot
+      ) : bulletinHighlights && bulletinHighlights.length > 0 ? (
+        <BellistaBulletinCardFan
+          items={bulletinHighlights}
+          variant="dashboard"
+        />
+      ) : null}
 
       {/* Fila 2 — 4 Tarjetas KPI a todo lo ancho (con CountUp, Waffle y Sparklines) */}
       <section

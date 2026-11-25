@@ -386,7 +386,6 @@ export function AtmosphericGradient() {
     resize();
     drawFrame(performance.now());
     window.addEventListener("resize", onLayout);
-    window.addEventListener("scroll", onLayout, { passive: true });
     window.addEventListener("pointermove", onPointerMove, { passive: true });
     window.addEventListener("pointercancel", onPointerLeave);
     window.addEventListener("blur", onPointerLeave);
@@ -402,7 +401,6 @@ export function AtmosphericGradient() {
       resizeObserver.disconnect();
       visibilityObserver.disconnect();
       window.removeEventListener("resize", onLayout);
-      window.removeEventListener("scroll", onLayout);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointercancel", onPointerLeave);
       window.removeEventListener("blur", onPointerLeave);

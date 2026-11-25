@@ -70,6 +70,65 @@ export default defineConfig({
         },
       },
     },
+    bulletinnotify: {
+      name: "Notificaciones Email Cartelera Bellista",
+      source: "./neon/functions/workflow-bulletin-publish-email/index.ts",
+      env: {
+        WORKFLOW_WEBHOOK_SECRET: {
+          value: process.env.WORKFLOW_WEBHOOK_SECRET,
+          required: false,
+          onUndefined: "skip",
+        },
+        N8N_WEBHOOK_URL_BULLETIN_PUBLISH: {
+          value: process.env.N8N_WEBHOOK_URL_BULLETIN_PUBLISH,
+          required: false,
+          onUndefined: "skip",
+        },
+        N8N_WEBHOOK_BASE_URL: {
+          value: process.env.N8N_WEBHOOK_BASE_URL,
+          required: false,
+          onUndefined: "skip",
+        },
+        N8N_WEBHOOK_SECRET: {
+          value: process.env.N8N_WEBHOOK_SECRET,
+          required: false,
+          onUndefined: "skip",
+        },
+        SIGA_PORTAL_BASE_URL: {
+          value:
+            process.env.SIGA_PORTAL_BASE_URL ??
+            process.env.NEXT_PUBLIC_APP_URL,
+          required: false,
+          onUndefined: "skip",
+        },
+      },
+    },
+    portfoliocoach: {
+      name: "Coach IA Portafolio y CV",
+      source: "./neon/functions/workflow-portfolio-ai-coach/index.ts",
+      env: {
+        WORKFLOW_WEBHOOK_SECRET: {
+          value: process.env.WORKFLOW_WEBHOOK_SECRET,
+          required: false,
+          onUndefined: "skip",
+        },
+        N8N_WEBHOOK_URL_PORTFOLIO_AI: {
+          value: process.env.N8N_WEBHOOK_URL_PORTFOLIO_AI,
+          required: false,
+          onUndefined: "skip",
+        },
+        N8N_WEBHOOK_BASE_URL: {
+          value: process.env.N8N_WEBHOOK_BASE_URL,
+          required: false,
+          onUndefined: "skip",
+        },
+        N8N_WEBHOOK_SECRET: {
+          value: process.env.N8N_WEBHOOK_SECRET,
+          required: false,
+          onUndefined: "skip",
+        },
+      },
+    },
   },
   // Branch policy: per-branch tuning
   branch: (branch) => {

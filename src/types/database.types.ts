@@ -3296,6 +3296,10 @@ export type Database = {
         }
         Returns: Json
       }
+      siga_get_dashboard_session_context: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

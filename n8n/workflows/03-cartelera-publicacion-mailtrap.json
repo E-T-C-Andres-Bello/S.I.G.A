@@ -1,0 +1,379 @@
+{
+  "name": "S.I.G.A. — Automatización 03: Publicación Cartelera -> Mailtrap",
+  "nodes": [
+    {
+      "id": "siga-03-webhook-bulletin-publish",
+      "name": "Webhook (Publicación Cartelera)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [0, 240],
+      "webhookId": "siga-cartelera-mailtrap",
+      "notes": "Recibe el payload firmado desde la Neon Function bulletinnotify mediante cabecera nativa Header Auth (x-siga-n8n-secret). ignoreBots = false para permitir llamadas server-to-server desde Node 24.",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "siga-cartelera-mailtrap",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {
+          "ignoreBots": false
+        }
+      }
+    },
+    {
+      "id": "siga-03-validate-payload",
+      "name": "Validar Payload Cartelera",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [272, 368],
+      "notes": "Validador de esquema en Set IIFE (<1 ms, sin nodo Code). Verifica record_id, audience_scope (institution | mention), lista de destinatarios y plantilla HTML.",
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "validation-result",
+              "name": "validation",
+              "type": "object",
+              "value": "={{ (() => {\n  // Validar contrato mínimo emitido por Neon Function bulletinnotify\n  const body = $('Webhook (Publicación Cartelera)').first().json.body || {};\n  const errors = [];\n  const REQUIRED_SCHEMA = {\n    record_id: 'uuid string',\n    audience_scope: 'institution | mention',\n    recipients: 'non-empty array of { email, name }',\n    email: '{ subject: string, html: string }'\n  };\n\n  if (typeof body.record_id !== 'string' || body.record_id.trim().length < 8) {\n    errors.push({ field: 'record_id', message: 'record_id requerido' });\n  }\n  if (body.audience_scope !== 'institution' && body.audience_scope !== 'mention') {\n    errors.push({ field: 'audience_scope', message: 'audience_scope debe ser institution o mention' });\n  }\n  const recipients = Array.isArray(body.recipients) ? body.recipients : [];\n  const validRecipients = recipients.filter((r) => r && typeof r.email === 'string' && r.email.includes('@'));\n  if (validRecipients.length === 0) {\n    errors.push({ field: 'recipients', message: 'Debe incluir al menos un destinatario con correo válido' });\n  }\n  if (!body.email || typeof body.email.subject !== 'string' || !body.email.subject.trim()) {\n    errors.push({ field: 'email.subject', message: 'Asunto del correo requerido' });\n  }\n  if (!body.email || typeof body.email.html !== 'string' || !body.email.html.trim()) {\n    errors.push({ field: 'email.html', message: 'Contenido HTML del correo requerido' });\n  }\n\n  return {\n    valid: errors.length === 0,\n    validationError: errors.length > 0 ? 'Payload de publicación de cartelera inválido.' : null,\n    details: errors,\n    requiredSchema: REQUIRED_SCHEMA\n  };\n})() }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "siga-03-is-payload-valid",
+      "name": "¿Payload Válido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [496, 368],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-valid",
+              "leftValue": "={{ $('Validar Payload Cartelera').first().json.validation.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "siga-03-respond-400",
+      "name": "Responder 400 Validación",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [752, 336],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ (() => {\n  const v = $('Validar Payload Cartelera').first().json.validation || {};\n  return {\n    ok: false,\n    error: 'validation_error',\n    message: v.validationError || 'Payload inválido.',\n    details: v.details || [],\n    request_schema: v.requiredSchema || {}\n  };\n})() }}",
+        "options": {
+          "responseCode": 400
+        }
+      }
+    },
+    {
+      "id": "siga-03-filter-scope",
+      "name": "Filtrar Alcance (Institución vs Mención)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [752, 144],
+      "notes": "Rama True: comunicado dirigido a toda la institución (audience_scope = institution). Rama False: comunicado filtrado a una mención/año específico (audience_scope = mention).",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-scope-institution",
+              "leftValue": "={{ $('Webhook (Publicación Cartelera)').first().json.body.audience_scope }}",
+              "rightValue": "institution",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "siga-03-split-institution",
+      "name": "Desglosar Destinatarios (Institución)",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1.1,
+      "position": [1024, 128],
+      "parameters": {
+        "fieldToSplitOut": "body.recipients",
+        "include": "noOtherFields",
+        "options": {}
+      }
+    },
+    {
+      "id": "siga-03-mailtrap-institution",
+      "name": "Mailtrap · Toda la Institución",
+      "type": "n8n-nodes-mailtrap.mailtrap",
+      "typeVersion": 1,
+      "position": [1248, 128],
+      "notes": "Envío institucional masivo (un correo por destinatario resuelto desde Neon) usando remitente oficial notificaciones@etcandresbello.org con reintentos ante fallos transitorios.",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "resource": "mail",
+        "operation": "send",
+        "authentication": "apiToken",
+        "fromEmail": "notificaciones@etcandresbello.org",
+        "toEmail": "={{ $('Desglosar Destinatarios (Institución)').item.json.email }}",
+        "subject": "={{ $('Webhook (Publicación Cartelera)').first().json.body.email.subject }}",
+        "html": "={{ $('Webhook (Publicación Cartelera)').first().json.body.email.html }}",
+        "additionalFields": {
+          "fromName": "={{ $('Webhook (Publicación Cartelera)').first().json.body.from_name || 'La Cartelera Bellista · E.T.C. \"Andrés Bello\"' }}",
+          "toName": "={{ $('Desglosar Destinatarios (Institución)').item.json.name || '' }}"
+        }
+      }
+    },
+    {
+      "id": "siga-03-split-mention",
+      "name": "Desglosar Destinatarios (Mención)",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1.1,
+      "position": [1024, 416],
+      "parameters": {
+        "fieldToSplitOut": "body.recipients",
+        "include": "noOtherFields",
+        "options": {}
+      }
+    },
+    {
+      "id": "siga-03-mailtrap-mention",
+      "name": "Mailtrap · Mención Única",
+      "type": "n8n-nodes-mailtrap.mailtrap",
+      "typeVersion": 1,
+      "position": [1248, 416],
+      "notes": "Envío segmentado a estudiantes y coordinadores de la mención/año destino usando remitente oficial notificaciones@etcandresbello.org con reintentos ante fallos transitorios.",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "resource": "mail",
+        "operation": "send",
+        "authentication": "apiToken",
+        "fromEmail": "notificaciones@etcandresbello.org",
+        "toEmail": "={{ $('Desglosar Destinatarios (Mención)').item.json.email }}",
+        "subject": "={{ $('Webhook (Publicación Cartelera)').first().json.body.email.subject }}",
+        "html": "={{ $('Webhook (Publicación Cartelera)').first().json.body.email.html }}",
+        "additionalFields": {
+          "fromName": "={{ $('Webhook (Publicación Cartelera)').first().json.body.from_name || 'La Cartelera Bellista · E.T.C. \"Andrés Bello\"' }}",
+          "toName": "={{ $('Desglosar Destinatarios (Mención)').item.json.name || '' }}"
+        }
+      }
+    },
+    {
+      "id": "siga-03-respond-200",
+      "name": "Responder 200 Enviado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [1504, 48],
+      "executeOnce": true,
+      "notes": "Ejecuta una sola vez tras completar los envíos de Mailtrap y consolida sent_count y message_ids para la auditoría en Neon PostgreSQL.",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ (() => {\n  const body = $('Webhook (Publicación Cartelera)').first().json.body || {};\n  const items = $input.all();\n  const messageIds = [];\n  for (const item of items) {\n    const data = item.json || {};\n    if (Array.isArray(data.message_ids)) {\n      for (const id of data.message_ids) {\n        if (id) messageIds.push(String(id));\n      }\n    } else if (data.messageId) {\n      messageIds.push(String(data.messageId));\n    } else if (data.id) {\n      messageIds.push(String(data.id));\n    }\n  }\n  return {\n    ok: true,\n    workflow_run_id: body.workflow_run_id || null,\n    record_id: body.record_id || null,\n    audience_scope: body.audience_scope || null,\n    audience_label: body.audience_label || null,\n    sender: 'notificaciones@etcandresbello.org',\n    sent_count: items.length,\n    message_ids: messageIds\n  };\n})() }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "siga-03-respond-502",
+      "name": "Responder 502 Error Mailtrap",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [1504, 240],
+      "executeOnce": true,
+      "notes": "Responde error 502 estructurado y sanitizado si Mailtrap falla tras los reintentos, sin exponer secretos ni trazas internas.",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ (() => {\n  const body = $('Webhook (Publicación Cartelera)').first().json.body || {};\n  return {\n    ok: false,\n    error: 'upstream_error',\n    message: 'No fue posible entregar la notificación del comunicado mediante Mailtrap.',\n    workflow_run_id: body.workflow_run_id || null,\n    record_id: body.record_id || null,\n    audience_scope: body.audience_scope || null\n  };\n})() }}",
+        "options": {
+          "responseCode": 502
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook (Publicación Cartelera)": {
+      "main": [
+        [
+          {
+            "node": "Validar Payload Cartelera",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Payload Cartelera": {
+      "main": [
+        [
+          {
+            "node": "¿Payload Válido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Payload Válido?": {
+      "main": [
+        [
+          {
+            "node": "Filtrar Alcance (Institución vs Mención)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 400 Validación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar Alcance (Institución vs Mención)": {
+      "main": [
+        [
+          {
+            "node": "Desglosar Destinatarios (Institución)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Desglosar Destinatarios (Mención)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Desglosar Destinatarios (Institución)": {
+      "main": [
+        [
+          {
+            "node": "Mailtrap · Toda la Institución",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mailtrap · Toda la Institución": {
+      "main": [
+        [
+          {
+            "node": "Responder 200 Enviado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 502 Error Mailtrap",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Desglosar Destinatarios (Mención)": {
+      "main": [
+        [
+          {
+            "node": "Mailtrap · Mención Única",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mailtrap · Mención Única": {
+      "main": [
+        [
+          {
+            "node": "Responder 200 Enviado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 502 Error Mailtrap",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [
+    {
+      "id": "siga-03-group-validacion",
+      "name": "Validación de Entrada",
+      "nodeNames": [
+        "Validar Payload Cartelera",
+        "¿Payload Válido?"
+      ],
+      "description": "Valida alcance, destinatarios y plantilla HTML antes de despachar; enruta inválidos a HTTP 400."
+    },
+    {
+      "id": "siga-03-group-institucion",
+      "name": "Envío Toda la Institución",
+      "nodeNames": [
+        "Desglosar Destinatarios (Institución)",
+        "Mailtrap · Toda la Institución"
+      ],
+      "description": "Desglosa destinatarios institucionales y envía por Mailtrap desde notificaciones@etcandresbello.org."
+    },
+    {
+      "id": "siga-03-group-mencion",
+      "name": "Envío Mención Única",
+      "nodeNames": [
+        "Desglosar Destinatarios (Mención)",
+        "Mailtrap · Mención Única"
+      ],
+      "description": "Desglosa estudiantes y coordinadores de la mención destino y envía por Mailtrap desde notificaciones@etcandresbello.org."
+    }
+  ],
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 60,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  }
+}

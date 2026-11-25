@@ -80,8 +80,16 @@ export function getSentryEnvironment(): string {
   );
 }
 
+export function isSentryRuntimeEnabled(dsn: string | undefined): boolean {
+  if (!dsn) return false;
+  if (process.env.NODE_ENV !== "production") {
+    return process.env.NEXT_PUBLIC_SENTRY_DEV_ENABLED === "1";
+  }
+  return true;
+}
+
 export function getSentryTracesSampleRate(): number {
-  return process.env.NODE_ENV === "production" ? 0.15 : 1.0;
+  return process.env.NODE_ENV === "production" ? 0.1 : 0;
 }
 
 /**

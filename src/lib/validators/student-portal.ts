@@ -45,6 +45,7 @@ export const OFFICIAL_DOCUMENT_TYPE_LABELS: Record<string, string> = {
   carta_postulacion_pasantia: "Carta de Postulación de Pasantías",
   carta_aceptacion_pasantia: "Carta de Aceptación de Pasantías",
   solvencia_biblioteca: "Solvencia Bibliotecaria",
+  portafolio_tecnico: "Portafolio Técnico y Hoja de Vida Verificada",
 };
 
 export const recoveryEmailSchema = z

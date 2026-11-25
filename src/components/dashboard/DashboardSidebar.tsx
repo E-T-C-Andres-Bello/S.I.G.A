@@ -9,6 +9,7 @@ import {
   BarChart3,
   Bell,
   BookOpenCheck,
+  BriefcaseBusiness,
   CalendarCheck2,
   ClipboardCheck,
   ClipboardList,
@@ -273,6 +274,12 @@ export function DashboardSidebar({
           label: "Trámites",
           href: "/estudiante/tramites",
           icon: FileText,
+        },
+        {
+          id: "portafolio",
+          label: "Portafolio y CV",
+          href: "/estudiante/portafolio",
+          icon: BriefcaseBusiness,
         }
       );
     }

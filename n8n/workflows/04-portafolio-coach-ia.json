@@ -1,0 +1,149 @@
+{
+  "name": "S.I.G.A. — Automatización 04: Coach IA Portafolio y CV (Neon -> n8n)",
+  "nodes": [
+    {
+      "id": "siga-04-webhook-portfolio-ai",
+      "name": "Webhook (Portafolio Coach IA)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [0, 144],
+      "webhookId": "siga-portafolio-ia",
+      "notes": "Recibe solicitudes desidentificadas de la Neon Function portfoliocoach con Header Auth (x-siga-n8n-secret). ignoreBots = false para permitir llamadas desde Node 24.",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "siga-portafolio-ia",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {
+          "ignoreBots": false
+        }
+      }
+    },
+    {
+      "id": "siga-04-validate",
+      "name": "Validar Solicitud Portafolio",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [256, 144],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": true,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "portfolio-validate",
+              "name": "validation",
+              "type": "object",
+              "value": "={{ (() => {\n  const body = $('Webhook (Portafolio Coach IA)').first().json.body || {};\n  const errors = [];\n  if (body.source !== 'siga_portfolio_studio') errors.push({ field: 'source', message: 'Origen inválido' });\n  if (body.mode !== 'coach' && body.mode !== 'import_pdf') errors.push({ field: 'mode', message: 'mode debe ser coach o import_pdf' });\n  if (body.mode === 'coach') {\n    const msg = typeof body.message === 'string' ? body.message.trim() : '';\n    if (msg.length < 2 || msg.length > 1000) errors.push({ field: 'message', message: 'Mensaje entre 2 y 1000 caracteres requerido' });\n  }\n  if (body.mode === 'import_pdf') {\n    const txt = typeof body.extracted_text === 'string' ? body.extracted_text.trim() : '';\n    if (txt.length < 40 || txt.length > 14000) errors.push({ field: 'extracted_text', message: 'Texto extraído de PDF entre 40 y 14000 caracteres requerido' });\n  }\n  return { valid: errors.length === 0, validationError: errors.length > 0 ? 'Solicitud inválida.' : null, details: errors };\n})() }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "siga-04-if-valid",
+      "name": "¿Solicitud Válida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [512, 144],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "cond-portfolio-valid",
+              "leftValue": "={{ $('Validar Solicitud Portafolio').first().json.validation.valid }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "siga-04-respond-400",
+      "name": "Responder 400 Validación",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [768, 320],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ (() => {\n  const v = $('Validar Solicitud Portafolio').first().json.validation || {};\n  return { ok: false, error: 'validation_error', message: v.validationError || 'Solicitud inválida.', details: v.details || [] };\n})() }}",
+        "options": { "responseCode": 400 }
+      }
+    },
+    {
+      "id": "siga-04-deepseek-model",
+      "name": "DeepSeek Coach Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatDeepSeek",
+      "typeVersion": 1,
+      "position": [768, 32],
+      "parameters": {
+        "model": "deepseek-v4.1-flash-1017",
+        "options": {
+          "maxTokens": 2200,
+          "responseFormat": "json_object",
+          "temperature": 0.35,
+          "timeout": 28000,
+          "maxRetries": 1
+        }
+      }
+    },
+    {
+      "id": "siga-04-agent",
+      "name": "Coach IA Portafolio y CV",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [768, 144],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ (() => {\n  const body = $('Webhook (Portafolio Coach IA)').first().json.body || {};\n  if (body.mode === 'import_pdf') {\n    return ['MODO: import_pdf', 'Mención: ' + (body.mencion_name || 'Educación Media Técnica'), '<texto_pdf_no_confiable>', String(body.extracted_text || '').trim(), '</texto_pdf_no_confiable>'].join('\\n');\n  }\n  const history = Array.isArray(body.history) ? body.history.slice(-6) : [];\n  const historyLines = history.length > 0 ? history.map((h) => (h.role === 'user' ? 'Estudiante: ' : 'Coach: ') + String(h.content || '')).join('\\n') : 'Sin turnos previos.';\n  return ['MODO: coach', 'Sección: ' + (body.section_key || 'general'), 'Mención: ' + (body.mencion_name || 'Educación Media Técnica'), '<texto_actual_del_bloque>', String(body.current_block_text || '(vacío)').trim(), '</texto_actual_del_bloque>', '<historial_conversacion>', historyLines, '</historial_conversacion>', '<mensaje_estudiante>', String(body.message || '').trim(), '</mensaje_estudiante>'].join('\\n');\n})() }}",
+        "options": {
+          "systemMessage": "Eres el Coach Pedagógico de Portafolio Técnico y Currículum de S.I.G.A. en la E.T.C. Andrés Bello. Responde únicamente con un objeto JSON válido siguiendo la filosofía socrática (modo coach) o extracción factual sin inventar datos (modo import_pdf).",
+          "maxIterations": 3,
+          "passthroughBinaryImages": false,
+          "enableStreaming": false
+        }
+      }
+    },
+    {
+      "id": "siga-04-respond-200",
+      "name": "Responder 200 Coach IA",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [1088, 80],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ (() => {\n  const body = $('Webhook (Portafolio Coach IA)').first().json.body || {};\n  const raw = $('Coach IA Portafolio y CV').first().json.output;\n  let parsed = raw;\n  if (typeof raw === 'string') {\n    try { parsed = JSON.parse(raw.replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/i, '').trim()); } catch (err) { return { ok: true, mode: body.mode || 'coach', reply: String(raw).slice(0, 1200), guidingQuestions: [], suggestedText: '', suggestedSkills: [] }; }\n  }\n  if (body.mode === 'import_pdf') {\n    return { ok: true, mode: 'import_pdf', summary: String(parsed?.summary || ''), suggestedTemplateId: String(parsed?.suggestedTemplateId || 'tecnico-moderno'), extracted: parsed?.extracted || {} };\n  }\n  return { ok: true, mode: 'coach', reply: String(parsed?.reply || ''), whyItMatters: parsed?.whyItMatters || null, guidingQuestions: Array.isArray(parsed?.guidingQuestions) ? parsed.guidingQuestions : [], suggestedText: String(parsed?.suggestedText || ''), suggestedSkills: Array.isArray(parsed?.suggestedSkills) ? parsed.suggestedSkills : [] };\n})() }}",
+        "options": { "responseCode": 200 }
+      }
+    },
+    {
+      "id": "siga-04-respond-5xx",
+      "name": "Responder 5xx Error IA",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [1088, 256],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ (() => ({ ok: false, error: 'upstream_error', message: 'No fue posible consultar al Coach IA en este momento.' }))() }}",
+        "options": { "responseCode": 502 }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook (Portafolio Coach IA)": { "main": [[{ "node": "Validar Solicitud Portafolio", "type": "main", "index": 0 }]] },
+    "Validar Solicitud Portafolio": { "main": [[{ "node": "¿Solicitud Válida?", "type": "main", "index": 0 }]] },
+    "¿Solicitud Válida?": { "main": [[{ "node": "Coach IA Portafolio y CV", "type": "main", "index": 0 }], [{ "node": "Responder 400 Validación", "type": "main", "index": 0 }]] },
+    "DeepSeek Coach Model": { "ai_languageModel": [[{ "node": "Coach IA Portafolio y CV", "type": "ai_languageModel", "index": 0 }]] },
+    "Coach IA Portafolio y CV": { "main": [[{ "node": "Responder 200 Coach IA", "type": "main", "index": 0 }], [{ "node": "Responder 5xx Error IA", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1", "executionTimeout": 45, "saveDataErrorExecution": "all", "saveDataSuccessExecution": "none" }
+}

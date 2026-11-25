@@ -210,7 +210,7 @@ export function BulletinDetailDialog({
           <Button
             type="button"
             size="sm"
-            disabled={confirming}
+            disabled={confirming || item.hasRead}
             onClick={handleConfirm}
             style={
               item.hasRead
@@ -225,8 +225,8 @@ export function BulletinDetailDialog({
             )}
             <span>
               {item.hasRead
-                ? `Enterado (${item.readCount})`
-                : `Confirmar enterado (${item.readCount})`}
+                ? `Leído · Guardado en Leídos (${item.readCount})`
+                : `Marcar como leído (${item.readCount})`}
             </span>
           </Button>
         </DialogFooter>
