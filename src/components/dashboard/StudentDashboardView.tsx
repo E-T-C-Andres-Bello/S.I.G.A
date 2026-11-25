@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "cn";
+import { BellistaBulletinCardFan } from "@/components/cartelera/BellistaBulletinCardFan";
 import { StudentFullCalendarDialog } from "@/components/estudiante/StudentFullCalendarDialog";
 import { StudentMedalsStrip } from "@/components/estudiante/StudentMedalsStrip";
 import { StudentSchedulePanel } from "@/components/estudiante/StudentSchedulePanel";
@@ -28,6 +29,7 @@ import type { StudentDashboardData } from "@/features/estudiante/dashboard-data"
 import type { StudentCarnetTokenPayload } from "@/features/estudiante/student-actions";
 import type { DashboardUserProfile } from "@/lib/auth/dashboard-session";
 import { formatVenezuelanCedulaDisplay } from "@/lib/validators/auth";
+import type { SchoolAnnouncementItem } from "@/lib/validators/bulletin";
 import { CountUp, SigaAnalyticsBento } from "./SigaAnalyticsBento";
 
 export type StudentPortalTab = "resumen" | "horario" | "carnet";
@@ -35,6 +37,7 @@ export type StudentPortalTab = "resumen" | "horario" | "carnet";
 export interface StudentDashboardViewProps {
   profile: DashboardUserProfile;
   data: StudentDashboardData;
+  bulletinHighlights?: SchoolAnnouncementItem[];
   initialCarnetToken?: StudentCarnetTokenPayload | null;
   initialCarnetError?: string | null;
   /** Fecha actual ISO (`YYYY-MM-DD`) en zona America/Caracas calculada en servidor. */
@@ -194,6 +197,7 @@ function MiniSubjectWaffle({
 export function StudentDashboardView({
   profile,
   data,
+  bulletinHighlights = [],
   initialCarnetToken = null,
   initialCarnetError = null,
   todayIso,
@@ -829,6 +833,12 @@ export function StudentDashboardView({
           </div>
         </motion.aside>
       </div>
+
+      {/* Bloque destacado — La Cartelera Bellista (Abanico dinámico con colores del evento) */}
+      <BellistaBulletinCardFan
+        items={bulletinHighlights}
+        variant="dashboard"
+      />
 
       {/* Fila 2 — 4 Tarjetas KPI a todo lo ancho (con CountUp, Waffle y Sparklines) */}
       <section

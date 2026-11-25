@@ -91,6 +91,167 @@ export type Database = {
           },
         ]
       }
+      announcement_reads: {
+        Row: {
+          announcement_id: string
+          read_at: string
+          user_id: string
+        }
+        Insert: {
+          announcement_id: string
+          read_at?: string
+          user_id: string
+        }
+        Update: {
+          announcement_id?: string
+          read_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcement_reads_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "school_announcements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_reads_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bulletin_ai_usage_logs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          department_label: string
+          id: string
+          latency_ms: number | null
+          request_mode: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          department_label: string
+          id?: string
+          latency_ms?: number | null
+          request_mode?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          department_label?: string
+          id?: string
+          latency_ms?: number | null
+          request_mode?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bulletin_ai_usage_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      school_announcements: {
+        Row: {
+          author_department: string
+          body: string
+          category: string
+          cover_webp_url: string | null
+          created_at: string
+          created_by: string
+          deleted_at: string | null
+          event_date: string | null
+          expires_at: string | null
+          id: string
+          is_pinned: boolean
+          is_published: boolean
+          location_label: string | null
+          published_at: string
+          short_note: string
+          target_grade_year: number | null
+          target_mencion_id: string | null
+          theme_palette: Json | null
+          title: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          author_department?: string
+          body: string
+          category: string
+          cover_webp_url?: string | null
+          created_at?: string
+          created_by: string
+          deleted_at?: string | null
+          event_date?: string | null
+          expires_at?: string | null
+          id?: string
+          is_pinned?: boolean
+          is_published?: boolean
+          location_label?: string | null
+          published_at?: string
+          short_note: string
+          target_grade_year?: number | null
+          target_mencion_id?: string | null
+          theme_palette?: Json | null
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          author_department?: string
+          body?: string
+          category?: string
+          cover_webp_url?: string | null
+          created_at?: string
+          created_by?: string
+          deleted_at?: string | null
+          event_date?: string | null
+          expires_at?: string | null
+          id?: string
+          is_pinned?: boolean
+          is_published?: boolean
+          location_label?: string | null
+          published_at?: string
+          short_note?: string
+          target_grade_year?: number | null
+          target_mencion_id?: string | null
+          theme_palette?: Json | null
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "school_announcements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "school_announcements_target_mencion_id_fkey"
+            columns: ["target_mencion_id"]
+            isOneToOne: false
+            referencedRelation: "menciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       assignment_submissions: {
         Row: {
           ai_pre_evaluation: Json | null
@@ -3048,6 +3209,90 @@ export type Database = {
       siga_public_validar_magic_link_pasantia: {
         Args: {
           p_raw_token: string
+        }
+        Returns: Json
+      }
+      siga_get_school_announcements: {
+        Args: {
+          p_include_editorial?: boolean
+          p_limit?: number
+        }
+        Returns: {
+          id: string
+          title: string
+          short_note: string
+          body: string
+          category: string
+          target_mencion_id: string | null
+          target_mencion_code: string | null
+          target_mencion_name: string | null
+          target_grade_year: number | null
+          event_date: string | null
+          location_label: string | null
+          cover_webp_url: string | null
+          theme_palette: Json | null
+          is_pinned: boolean
+          is_published: boolean
+          published_at: string
+          expires_at: string | null
+          created_by: string
+          author_name: string | null
+          author_department: string
+          can_edit: boolean
+          read_count: number
+          has_read: boolean
+          read_at: string | null
+          updated_at: string
+        }[]
+      }
+      siga_confirm_announcement_read: {
+        Args: {
+          p_announcement_id: string
+        }
+        Returns: Json
+      }
+      siga_upsert_school_announcement: {
+        Args: {
+          p_announcement_id?: string | null
+          p_title?: string
+          p_short_note?: string
+          p_body?: string
+          p_category?: string
+          p_target_mencion_id?: string | null
+          p_target_grade_year?: number | null
+          p_event_date?: string | null
+          p_location_label?: string | null
+          p_cover_webp_url?: string | null
+          p_theme_palette?: Json | null
+          p_is_pinned?: boolean
+          p_is_published?: boolean
+          p_expires_at?: string | null
+        }
+        Returns: Json
+      }
+      siga_archive_school_announcement: {
+        Args: {
+          p_announcement_id: string
+        }
+        Returns: Json
+      }
+      siga_consume_bulletin_ai_quota: {
+        Args: {
+          p_request_mode?: string
+        }
+        Returns: Json
+      }
+      siga_service_verify_bulletin_ai_ticket: {
+        Args: {
+          p_usage_log_id: string
+        }
+        Returns: Json
+      }
+      siga_finish_bulletin_ai_usage: {
+        Args: {
+          p_latency_ms?: number | null
+          p_status: string
+          p_usage_log_id: string
         }
         Returns: Json
       }

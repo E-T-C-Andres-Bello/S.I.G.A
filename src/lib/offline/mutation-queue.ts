@@ -1,6 +1,13 @@
 "use client";
 
-export type OfflineMutationKind = "attendance_batch" | "grade_entry";
+export type OfflineMutationKind =
+  | "attendance_batch"
+  | "grade_entry"
+  | "announcement_read";
+
+export interface OfflineAnnouncementReadPayload {
+  announcementId: string;
+}
 
 export interface OfflineAttendanceBatchPayload {
   teacherAssignmentId: string;
@@ -28,7 +35,10 @@ export interface QueuedOfflineMutation {
   clientMutationId: string;
   dedupKey: string;
   kind: OfflineMutationKind;
-  payload: OfflineAttendanceBatchPayload | OfflineGradeEntryPayload;
+  payload:
+    | OfflineAttendanceBatchPayload
+    | OfflineGradeEntryPayload
+    | OfflineAnnouncementReadPayload;
   createdAt: string;
   attempts: number;
   lastError: string | null;
@@ -66,7 +76,10 @@ function openOfflineQueueDb(): Promise<IDBDatabase> {
 export async function enqueueOfflineMutation(params: {
   dedupKey: string;
   kind: OfflineMutationKind;
-  payload: OfflineAttendanceBatchPayload | OfflineGradeEntryPayload;
+  payload:
+    | OfflineAttendanceBatchPayload
+    | OfflineGradeEntryPayload
+    | OfflineAnnouncementReadPayload;
   clientMutationId?: string;
 }): Promise<QueuedOfflineMutation> {
   const db = await openOfflineQueueDb();

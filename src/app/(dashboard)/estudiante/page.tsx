@@ -5,6 +5,7 @@ import {
   type StudentPortalTab,
 } from "@/components/dashboard/StudentDashboardView";
 import { ProvisionalStudentOnboardingView } from "@/components/estudiante/ProvisionalStudentOnboardingView";
+import { getDashboardBulletinHighlights } from "@/features/cartelera/announcements-data";
 import { getStudentDashboardData } from "@/features/estudiante/dashboard-data";
 import { getProvisionalStudentOnboardingData } from "@/features/estudiante/provisional-data";
 import { generateStudentCarnetTokenAction } from "@/features/estudiante/student-actions";
@@ -63,13 +64,15 @@ export default async function EstudianteHomePage({
   ]);
 
   if (profile.accessTier === "provisional_cedula") {
-    const onboarding = await getProvisionalStudentOnboardingData(
-      profile.internalUserId
-    );
+    const [onboarding, bulletinHighlights] = await Promise.all([
+      getProvisionalStudentOnboardingData(profile.internalUserId),
+      getDashboardBulletinHighlights(profile, 9),
+    ]);
     return (
       <ProvisionalStudentOnboardingView
         profile={profile}
         onboarding={onboarding}
+        bulletinHighlights={bulletinHighlights}
         authErrorCode={params.auth_error ?? null}
       />
     );
@@ -89,10 +92,11 @@ export default async function EstudianteHomePage({
       ? (params.tab as StudentPortalTab)
       : "resumen";
 
-  const [{ todayIso, greeting }, dashboardData, carnetResult] =
+  const [{ todayIso, greeting }, dashboardData, bulletinHighlights, carnetResult] =
     await Promise.all([
       Promise.resolve(getCaracasTimeContext()),
       getStudentDashboardData(profile.internalUserId, profile.accessTier),
+      getDashboardBulletinHighlights(profile, 9),
       initialTab === "carnet"
         ? generateStudentCarnetTokenAction(120)
         : Promise.resolve(null),
@@ -102,6 +106,7 @@ export default async function EstudianteHomePage({
     <StudentDashboardView
       profile={profile}
       data={dashboardData}
+      bulletinHighlights={bulletinHighlights}
       initialCarnetToken={carnetResult && carnetResult.ok ? carnetResult.data : null}
       initialCarnetError={
         carnetResult && !carnetResult.ok ? carnetResult.message : null

@@ -7,6 +7,7 @@ Esta carpeta aloja las funciones serverless en **Node.js 24** gestionadas por **
 | Slug en `neon.ts` | Entrypoint | Descripción |
 | :--- | :--- | :--- |
 | **`studentreqmail`** | `neon/functions/workflow-student-request-email/index.ts` | Automatización 01: al crearse un trámite en `public.student_requests`, registra la notificación in-app, despacha acuse al estudiante y alerta a Control de Estudios vía **n8n → Mailtrap** y actualiza `workflows.workflow_runs`. |
+| **`bulletinai`** | `neon/functions/workflow-bulletin-ai-assistant/index.ts` | Automatización 02: valida el ticket de cuota editorial (`bulletin_ai_usage_logs`), desidentifica PII y conecta el Asistente IA de `/cartelera/gestion` con el webhook de **n8n** devolviendo sugerencias sanitizadas. |
 
 > **Nota:** La antigua función `neon-analytics-query` fue retirada porque Next.js consulta directamente a Neon PostgreSQL mediante la función RLS `siga_get_analytics_bi_overview`.
 

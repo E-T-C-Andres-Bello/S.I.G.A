@@ -52,9 +52,11 @@ export function getNeonStorageConfig(
 
 /**
  * Crea un cliente Files SDK conectado al bucket de Neon Object Storage indicado
- * (`uploads`, `assets` o `student-avatars`).
+ * (`uploads`, `assets`, `student-avatars` o `school-announcements`).
  */
-export function createNeonBucketFiles(bucket: "uploads" | "assets" | "student-avatars"): Files {
+export function createNeonBucketFiles(
+  bucket: "uploads" | "assets" | "student-avatars" | "school-announcements"
+): Files {
   return new Files({
     adapter: neon({ bucket }),
   });
@@ -111,5 +113,42 @@ export async function deleteStudentAvatarFromNeonStorage(
     await files.delete(`${authUserId}/avatar.webp`);
   } catch {
     // Si el objeto ya no existe, continuar limpiamente
+  }
+}
+
+/**
+ * Sube una portada `.webp` para un anuncio de La Cartelera Bellista al bucket
+ * público `school-announcements` en Neon Object Storage.
+ */
+export async function uploadAnnouncementCoverToNeonStorage(params: {
+  objectKey: string;
+  bytes: Buffer;
+  contentType: string;
+}): Promise<{ ok: true; publicUrl: string } | { ok: false; message: string }> {
+  const config = getNeonStorageConfig("school-announcements");
+  if (!config) {
+    return {
+      ok: false,
+      message:
+        "El servicio de almacenamiento de imágenes no está disponible en este entorno. Puedes publicar el anuncio igualmente sin portada.",
+    };
+  }
+
+  const key = `covers/${params.objectKey}.webp`;
+  const files = createNeonBucketFiles("school-announcements");
+
+  try {
+    await files.upload(key, params.bytes, {
+      contentType: params.contentType,
+    });
+
+    const versionedUrl = `${config.publicBaseUrl}/${key}?v=${Date.now()}`;
+    return { ok: true, publicUrl: versionedUrl };
+  } catch (error) {
+    console.error("[neon-storage] Error subiendo portada de cartelera:", error);
+    return {
+      ok: false,
+      message: "No se pudo guardar la imagen de portada en este momento.",
+    };
   }
 }

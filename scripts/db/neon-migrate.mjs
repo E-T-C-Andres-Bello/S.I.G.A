@@ -310,34 +310,60 @@ async function runStatus() {
     }
 
     const files = listMigrationFiles();
+    const localSet = new Set(files);
+    const remoteOnly = [...appliedSet].filter((v) => !localSet.has(v));
+
     console.log("\nEstado de migraciones:");
     for (const file of files) {
       const state = appliedSet.has(file) ? "APLICADA " : "PENDIENTE";
       console.log(`  [${state}] ${file}`);
     }
+    for (const remoteFile of remoteOnly) {
+      console.log(
+        `  [SOLO NEON] ${remoteFile}  (falta en tu carpeta local — haz git pull)`
+      );
+    }
+
     const pending = files.filter((f) => !appliedSet.has(f)).length;
-    console.log(`\nTotal: ${files.length} | Aplicadas: ${appliedSet.size} | Pendientes: ${pending}`);
+    const summaryParts = [
+      `Locales: ${files.length}`,
+      `Aplicadas en Neon: ${appliedSet.size}`,
+      `Pendientes: ${pending}`,
+    ];
+    if (remoteOnly.length > 0) {
+      summaryParts.push(`Solo en Neon: ${remoteOnly.length}`);
+    }
+    console.log(`\n${summaryParts.join(" | ")}`);
   } finally {
     await client.end();
   }
 }
 
-async function runSeed() {
+async function runSeed(customSeedArg) {
+  const targetPath = customSeedArg
+    ? path.resolve(ROOT_DIR, customSeedArg)
+    : BASE_SEED_PATH;
+
+  if (!fs.existsSync(targetPath)) {
+    throw new Error(`No se encontró el archivo seed: ${targetPath}`);
+  }
+
+  const label = path.basename(targetPath);
   const { client, source } = await createConnectedClient();
   try {
-    console.log(`[neon-db] Conectado vía ${source}. Cargando catálogos base (catalogos_base.sql)...`);
-    const raw = fs.readFileSync(BASE_SEED_PATH, "utf8");
-    const { sql, notes } = adaptSqlForNeon("catalogos_base.sql", raw);
+    console.log(`[neon-db] Conectado vía ${source}. Cargando seed (${label})...`);
+    const raw = fs.readFileSync(targetPath, "utf8");
+    const { sql, notes } = adaptSqlForNeon(label, raw);
 
     await client.query("BEGIN");
     try {
       await client.query(sql);
       await client.query("COMMIT");
       const suffix = notes.length > 0 ? ` (${notes.join(", ")})` : "";
-      console.log(`[neon-db] ✓ Catálogos base aplicados correctamente${suffix}.`);
+      console.log(`[neon-db] ✓ Seed ${label} aplicado correctamente${suffix}.`);
     } catch (err) {
       await client.query("ROLLBACK");
-      console.error("[neon-db] ✗ Error cargando catálogos base:", err.message);
+      console.error(`[neon-db] ✗ Error cargando ${label}:`, err.message);
       throw err;
     }
   } finally {
@@ -355,9 +381,9 @@ try {
   } else if (command === "status") {
     await runStatus();
   } else if (command === "seed") {
-    await runSeed();
+    await runSeed(process.argv[3]);
   } else {
-    console.error(`Comando desconocido: ${command}. Usa: migrate | status | seed | --self-test`);
+    console.error(`Comando desconocido: ${command}. Usa: migrate | status | seed [archivo.sql] | --self-test`);
     process.exit(1);
   }
 } catch (err) {

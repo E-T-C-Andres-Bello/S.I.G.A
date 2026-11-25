@@ -59,3 +59,32 @@ Sustituye cada uno por tu nodo nativo **`Mailtrap → Send an email`** (puede te
 1. En modo desarrollo el nodo **`Webhook (Trámite S.I.G.A.)`** viene con `Authentication: None` listo para probar sin fricción (cuando pases a producción, cámbialo a `Header Auth` con `x-siga-n8n-secret` y configura `N8N_WEBHOOK_SECRET` en `.env.local` antes de ejecutar `neon deploy --env .env.local`).
 2. Activa el toggle **Active** del workflow y copia la **Production Webhook URL** del Webhook.
 3. Configura `N8N_WEBHOOK_URL_STUDENT_REQUEST` en tus variables de entorno y redespliega con `neon deploy --env .env.local` tal como se indica en [`neon/functions/README.md`](../../neon/functions/README.md).
+
+---
+
+## Automatización 02 · Asistente IA Editorial de La Cartelera Bellista
+
+- **Archivo:** [`02-cartelera-asistente-ia.json`](./02-cartelera-asistente-ia.json)
+- **Flujo seguro extremo a extremo (OWASP LLM 2025 + estándares oficiales de n8n):**
+
+```text
+Editor en /cartelera/gestion
+  └─▶ Next.js POST /api/cartelera/ai-assistant (Better Auth + rol editorial + cuota 25/h en Neon)
+        └─▶ Neon Function `bulletinai` (x-siga-workflow-secret + verificación de ticket + redacción PII)
+              └─▶ Webhook n8n (`POST /webhook/siga-cartelera-ia` con autenticación nativa Header Auth `x-siga-n8n-secret`)
+                    ├─ Validar Entrada Editorial (Set IIFE <1 ms) → Entrada Válida?
+                    │     └─ (No) → Responder 400 Validación (`validation_error` estructurado)
+                    └─ (Sí) → Redactor Editorial IA (`@n8n/n8n-nodes-langchain.agent` + DeepSeek + Parser JSON con AutoFix)
+                          ├─ (Éxito) → Responder 200 Propuesta IA (`{ ok: true, reply, suggestion }`)
+                          └─ (Error) → Responder 5xx Error IA (`502/503/504` sanitizado sin stack traces)
+```
+
+### Cómo conectarlo en n8n
+1. El workflow **`S.I.G.A. — 02 Asistente IA Cartelera Bellista (Neon -> n8n)`** (también exportable desde [`02-cartelera-asistente-ia.json`](./02-cartelera-asistente-ia.json)) utiliza **0 nodos Code** y **0 usos de `$env`**.
+2. Abre el nodo **`Webhook (Cartelera IA S.I.G.A.)`**: ya viene con **`Authentication: Header Auth`**. En **Credential for Header Auth**, crea una credencial de tipo **`Header Auth` (`httpHeaderAuth`)** con:
+   - **Name:** `x-siga-n8n-secret`
+   - **Value:** tu `N8N_WEBHOOK_SECRET` (exactamente el mismo que colocarás en `.env.local`).
+   > Con esta credencial nativa, n8n almacena el secreto cifrado en reposo y rechaza cualquier petición sin cabecera válida con HTTP `401` antes de ejecutar el flujo.
+3. Confirma las credenciales de **`DeepSeek Chat Model`** y **`DeepSeek AutoFix Model`** (vienen listos con **Gateway credits** de n8n Cloud, o puedes cambiarlos a tu propia credencial `DeepSeek API`).
+4. Prueba el flujo, actívalo (**Publish / Active**), copia su **Production Webhook URL** en `N8N_WEBHOOK_URL_BULLETIN_AI` dentro de `.env.local` y despliega la función con `neon deploy --env .env.local`.
+5. Configura `NEON_FUNCTION_BULLETINAI_URL` y `WORKFLOW_WEBHOOK_SECRET` en las variables privadas de servidor de Next.js / Cloudflare.

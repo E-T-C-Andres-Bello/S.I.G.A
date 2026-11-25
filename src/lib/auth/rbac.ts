@@ -52,6 +52,28 @@ export const DASHBOARD_ROUTE_ACCESS: ReadonlyArray<{
     allowedRoles: ["docente", "coordinador_mencion", "direccion"],
   },
   {
+    prefix: "/cartelera/gestion",
+    allowedRoles: [
+      "direccion",
+      "control_estudios",
+      "coordinador_mencion",
+      "coordinador_pasantias",
+    ],
+  },
+  {
+    prefix: "/estudiante/cartelera",
+    allowedRoles: [
+      "estudiante",
+      "docente",
+      "coordinador_mencion",
+      "coordinador_pasantias",
+      "control_estudios",
+      "orientacion",
+      "biblioteca",
+      "direccion",
+    ],
+  },
+  {
     prefix: "/estudiante",
     allowedRoles: ["estudiante", "direccion", "control_estudios"],
   },

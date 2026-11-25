@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { BellistaBulletinCardFan } from "@/components/cartelera/BellistaBulletinCardFan";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -48,10 +49,12 @@ import {
   STUDENT_REQUEST_STATUS_LABELS,
   type StudentRequestStatus,
 } from "@/lib/validators/student-portal";
+import type { SchoolAnnouncementItem } from "@/lib/validators/bulletin";
 
 export interface ProvisionalStudentOnboardingViewProps {
   profile: DashboardUserProfile;
   onboarding: ProvisionalOnboardingData;
+  bulletinHighlights?: SchoolAnnouncementItem[];
   authErrorCode?: string | null;
 }
 
@@ -66,6 +69,7 @@ function isKnownAuthErrorCode(code: string | null | undefined): code is AuthErro
 export function ProvisionalStudentOnboardingView({
   profile,
   onboarding,
+  bulletinHighlights = [],
   authErrorCode,
 }: ProvisionalStudentOnboardingViewProps) {
   const [recoveryEmail, setRecoveryEmail] = React.useState(
@@ -256,6 +260,12 @@ export function ProvisionalStudentOnboardingView({
           </div>
         </div>
       </section>
+
+      {/* La Cartelera Bellista visible también para estudiantes en acceso provisional */}
+      <BellistaBulletinCardFan
+        items={bulletinHighlights}
+        variant="dashboard"
+      />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         {/* Tarjeta 1: Ficha de Inscripción */}

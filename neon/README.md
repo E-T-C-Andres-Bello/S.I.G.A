@@ -70,10 +70,11 @@ neon/
 
 ## 4. Base de datos y migraciones SQL
 
-### Ver qué migraciones están aplicadas o pendientes
+### Ver qué migraciones están aplicadas, pendientes o solo en Neon
 ```bash
 npm run db:status
 ```
+*(Si otra compañera ya subió una migración a Neon y aún no la tienes en tu carpeta local, aparecerá marcada como `[SOLO NEON]` para avisarte de hacer `git pull`.)*
 
 ### Aplicar migraciones pendientes
 ```bash

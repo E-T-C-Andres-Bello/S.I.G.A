@@ -18,7 +18,9 @@ import {
   Layers,
   Loader2,
   LogOut,
+  Megaphone,
   Moon,
+  SquarePen,
   Sun,
   type LucideIcon,
 } from "lucide-react";
@@ -228,7 +230,29 @@ export function DashboardSidebar({
         href: homeHref,
         icon: Home,
       },
+      {
+        id: "cartelera",
+        label: "Cartelera",
+        href: "/estudiante/cartelera",
+        icon: Megaphone,
+      },
     ];
+
+    const canManageBulletin =
+      isVerifiedWorkspace &&
+      (profile.primaryRole === "direccion" ||
+        profile.primaryRole === "control_estudios" ||
+        profile.primaryRole === "coordinador_mencion" ||
+        profile.primaryRole === "coordinador_pasantias");
+
+    if (canManageBulletin) {
+      items.push({
+        id: "gestion-cartelera",
+        label: "Gestionar Cartelera",
+        href: "/cartelera/gestion",
+        icon: SquarePen,
+      });
+    }
 
     if (profile.primaryRole === "estudiante" && isVerifiedWorkspace) {
       items.push(

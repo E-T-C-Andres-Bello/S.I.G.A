@@ -43,9 +43,17 @@ const gradeMutationSchema = z.object({
   }),
 });
 
+const announcementReadMutationSchema = z.object({
+  kind: z.literal("announcement_read"),
+  payload: z.object({
+    announcementId: z.string().uuid(),
+  }),
+});
+
 const syncPayloadSchema = z.discriminatedUnion("kind", [
   attendanceMutationSchema,
   gradeMutationSchema,
+  announcementReadMutationSchema,
 ]);
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -96,6 +104,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             p_block_label: item.payload.blockLabel,
             p_recorded_mode: item.payload.recordedMode,
             p_records: JSON.stringify(item.payload.records),
+          });
+        } else if (item.kind === "announcement_read") {
+          await callNeonRpcScalar(client, "siga_confirm_announcement_read", {
+            p_announcement_id: item.payload.announcementId,
           });
         } else {
           await callNeonRpcScalar(client, "siga_registrar_nota", {
